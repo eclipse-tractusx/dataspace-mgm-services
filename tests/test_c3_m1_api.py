@@ -27,15 +27,16 @@
 Tokens come from the in-memory test IAM of the scaffold; permissions are read from the spec there.
 """
 import pytest
+from conftest import BASE, bearer, person_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from modules.c3_m1 import interface, router as c3_router
+from features import company_profile
+from features.company_profile.managers import company_repository
+from features.company_profile.router import router as company_profile_router
 from portal_common import http as phttp
 from portal_common import problems, standin
 from tools import test_iam
-
-from conftest import BASE, bearer, person_token
 
 U1 = "c0000001-0000-4000-8000-000000000001"
 U2 = "c0000002-0000-4000-8000-000000000002"
@@ -48,10 +49,10 @@ def client() -> TestClient:
     app = FastAPI()
     problems.install(app)
     app.include_router(test_iam.router)
-    app.include_router(c3_router.router)
-    app.include_router(standin.fallback_router(c3_router.MODULE, c3_router.router))   # as scaffold/app.py
+    app.include_router(company_profile_router)
+    app.include_router(standin.fallback_router(company_profile.MODULE, company_profile_router))   # as scaffold/app.py
     phttp.register_local(BASE, app)
-    interface.reset()
+    company_profile.reset()
     return TestClient(app, base_url=BASE)
 
 
@@ -117,11 +118,11 @@ def test_a_member_may_read_but_not_patch(client, active):
 
 # ------------------------------------------------------------------------------------------ 13.10
 def test_the_short_name_is_changed_and_locked_fields_refused(client, active):
-    assert len(interface.store.list_audit(U1)) > 0
+    assert len(company_repository.list_audit(U1)) > 0
     response = call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P1,
                     json={"shortName": "BMW"})
     assert response.status_code == 200 and response.json()["shortName"] == "BMW"
-    audit = interface.store.list_audit(U1)[-1]
+    audit = company_repository.list_audit(U1)[-1]
     assert audit["sub"] == "5a1c0001-0000-4000-8000-000000000001"
     assert audit["details"]["old"]["short_name"] is None
 
@@ -148,7 +149,7 @@ def test_the_osp_correction_switches_the_source_to_manual(client, active):
     assert body["address"]["street"] == "Neue Straße" and body["address"]["countryCode"] == "DE"
     assert body["coreDataSource"] == "MANUAL" and body["verificationRef"] is None
     assert body["coreDataVerifiedAt"] is not None
-    assert [e for e in interface.store.list_audit(U1) if e["operation"] == "correctCompany"]
+    assert [e for e in company_repository.list_audit(U1) if e["operation"] == "correctCompany"]
 
 
 def test_the_country_is_locked_after_the_bpn(client, active):

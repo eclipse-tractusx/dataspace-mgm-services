@@ -583,7 +583,7 @@ def test_readme_11_1_company_query_failing_is_502_upstream_error_retryable(osp_f
     def broken(**_kw):
         raise RuntimeError("C3-M1 is down")
 
-    monkeypatch.setattr("modules.c3_m1.interface.query_company", broken)
+    monkeypatch.setattr("features.company_profile.interface.query_company", broken)
     assert_problem(issue(osp, U1), 502, "upstream-error", retryable=True)
     no_rows_created(U1)
     assert orders() == []

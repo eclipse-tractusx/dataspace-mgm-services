@@ -23,10 +23,10 @@
 #  Assisted-By: Claude Code (claude-opus-5-5)
 #################################################################################
 """Module registry and installation app: every module and every operation of the spec is mounted."""
+from conftest import BASE, bearer, person_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from conftest import BASE, bearer, person_token
 from portal_common import problems, spec, standin
 from scaffold import app as scaffold_app
 from scaffold import registry
@@ -36,8 +36,9 @@ def test_every_spec_module_has_a_folder_and_a_kind():
     kinds = {e.id: e.kind for e in registry.load()}
     assert set(kinds) == set(spec.modules())
     assert kinds["c12-m1"] == "provided"
-    # every other module is a stand-in or the module of a team (no STANDIN, no PROVIDED)
-    assert {k for k, v in kinds.items() if v not in ("stand-in", "team")} == {"c12-m1"}
+    # every other module is a stand-in, the module of a team or a migrated feature (ADR-0003)
+    assert {k for k, v in kinds.items() if v not in ("stand-in", "team", "feature")} == {"c12-m1"}
+    assert kinds["c1-m2"] == kinds["c3-m1"] == "feature"
     assert [e.id for e in registry.load()][-2:] == ["c11-m1", "c12-m1"]   # subscribers last
 
 

@@ -105,6 +105,11 @@ class ModuleSpec:
     def package(self) -> str:
         return self.id.replace("-", "_")
 
+    @property
+    def name(self) -> str:
+        """Readable name from the spec folder: `C3-M1-CompanyProfile` -> `company_profile` (ADR-0003)."""
+        return snake_case(self.folder.split("-", 2)[2])
+
     def steps(self) -> dict[str, Operation]:
         return {op.path.removeprefix("/steps/"): op for op in self.operations if op.is_step}
 

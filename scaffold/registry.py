@@ -22,7 +22,11 @@
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: Claude Code (claude-opus-5-5)
 #################################################################################
-"""Module registry: one folder per module of the spec, `modules/<module id with _>/`.
+"""Module registry: every module of the spec, either a migrated feature `features/<name>/` (ADR-0003,
+located by `portal_common.layout`) or its hackathon folder `modules/<module id with _>/`.
+
+A feature brings its `router.py` and the lifecycle hooks of its index (`reset()`, optional
+`on_startup()` and `on_event(event)`); its kind is "feature".
 
 Contract of a module folder (a team replaces only its folder):
 - `interface.py` with a function for every step and query of the spec (README, module structure);
@@ -33,7 +37,7 @@ Contract of a module folder (a team replaces only its folder):
 - an empty `__init__.py`, no top-level modules beside the folders.
 
 The list of modules comes from the spec (every folder with an `/api/<module>` base), limited to
-`ENABLED_MODULES` when set (one runtime per module, ADR-0002). A module
+the features of the runtime (`runtimes/`, `ENABLED_FEATURES`; ADR-0002, ADR-0003). A module
 without a folder is still mounted, as the spec-driven fallback (every path answers 501, steps DONE).
 Every operation of the spec that a module does not implement is added from the fallback too.
 """
@@ -41,10 +45,11 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+from collections.abc import Iterable
 from dataclasses import dataclass
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
-from portal_common import runtime, spec
+from portal_common import layout, runtime, spec
 
 LAST = ("c11-m1", "c12-m1")   # subscribers that react to the events of all others
 
@@ -52,15 +57,28 @@ LAST = ("c11-m1", "c12-m1")   # subscribers that react to the events of all othe
 @dataclass
 class Entry:
     id: str
-    module: ModuleType | None   # router.py of the folder, None = spec fallback only
-    kind: str                   # "stand-in", "provided", "team" or "fallback"
+    module: ModuleType | SimpleNamespace | None   # router + lifecycle, None = spec fallback only
+    kind: str                   # "feature", "stand-in", "provided", "team" or "fallback"
 
 
-def load() -> list[Entry]:
+def _feature(mid: str) -> SimpleNamespace:
+    index = layout.index(mid)
+    if index.MODULE != mid:
+        raise ValueError(f"features.{index.NAME} declares MODULE {index.MODULE!r}, the spec folder says {mid!r}")
+    hooks = {k: getattr(index, k) for k in ("reset", "on_startup", "on_event") if hasattr(index, k)}
+    return SimpleNamespace(router=layout.router(mid), **hooks)
+
+
+def load(features: Iterable[str] | None = None) -> list[Entry]:
+    """The modules of this process: `features` (readable names or spec ids), else `ENABLED_FEATURES`, else all."""
+    enabled = runtime.enabled_modules(features)
     entries = []
     for mid in spec.modules():
-        if not runtime.is_enabled(mid):
+        if enabled is not None and mid not in enabled:
             continue   # served by another runtime, reached through MODULE_URLS
+        if layout.feature(mid):
+            entries.append(Entry(mid, _feature(mid), "feature"))
+            continue
         name = f"modules.{mid.replace('-', '_')}.router"
         mod = importlib.import_module(name) if importlib.util.find_spec(name.rsplit(".", 1)[0]) and \
             importlib.util.find_spec(name) else None

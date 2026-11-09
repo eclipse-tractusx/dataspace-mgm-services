@@ -53,7 +53,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 
-from . import spec, tokens
+from . import layout, spec, tokens
 from .problems import Problem, route_class
 
 NAMESPACE = uuid.UUID("6f1c3f0e-6a8e-4c7e-9a43-6f1d2b7c9a10")
@@ -122,7 +122,7 @@ def _standin_function(op: spec.Operation) -> Callable:
 def missing_interface(module: str) -> Callable[[str], Callable]:
     """`__getattr__` for `modules/<module>/interface.py`: every step and query of the spec that the
     module does not define yet, as a stand-in function. Delete the line once all are implemented."""
-    package = f"modules.{spec.module(module).package}.interface"
+    package = layout.interface_package(module)
 
     def __getattr__(name: str) -> Callable:
         op = _interface_operations(module).get(name)
@@ -134,8 +134,8 @@ def missing_interface(module: str) -> Callable[[str], Callable]:
 
 
 def interface_function(module: str, name: str) -> Callable:
-    """`modules.<module>.interface.<name>`; for a module without a folder, the stand-in function."""
-    package = f"modules.{spec.module(module).package}.interface"
+    """`<name>` of the module's `interface.py` (service or folder); for a module without code, the stand-in."""
+    package = layout.interface_package(module)
     try:
         iface = importlib.import_module(package)
     except ModuleNotFoundError as e:

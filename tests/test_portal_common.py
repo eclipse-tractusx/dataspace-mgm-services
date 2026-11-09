@@ -32,11 +32,11 @@ import uuid
 import httpx
 import jwt
 import pytest
+from conftest import BASE, bearer, person_token
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from conftest import BASE, bearer, person_token
 from portal_common import events, neighbours, problems, settings, spec, standin, tokens
 from portal_common import http as phttp
 from portal_common.problems import Problem
@@ -224,7 +224,7 @@ def test_neighbour_query_over_http_sends_service_token_and_maps_errors(monkeypat
 
 
 def test_neighbour_query_in_process_calls_the_interface_function(monkeypatch):
-    from modules.c1_m2 import interface as c1_m2
+    from features.registration import interface as c1_m2
     seen = {}
 
     def get_application_internal(*, applicationId):

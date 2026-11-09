@@ -21,24 +21,40 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: Claude Code (claude-opus-5-5)
-"""Runtime profile of one process (FRAMEWORK 1, ADR-0002): which modules this pod serves.
+"""Runtime profile of one process (FRAMEWORK 1, ADR-0002, ADR-0003): which features this pod serves.
 
-`ENABLED_MODULES` is a comma separated list of module ids (`c1-m2,c3-m1`). Unset or empty means all
-modules of the spec: the modular monolith. Every other module is reached through its address from
-`MODULE_URLS` / `<MODULE>_URL` (FRAMEWORK 4.7), so the same image runs as monolith or as one pod per module.
+A runtime in `runtimes/` names its features in code (`create_runtime(registration, company_profile)`);
+the generic installation runtime takes them from `ENABLED_FEATURES`, a comma separated list of
+readable names or spec ids (`registration,company_profile` or `c1-m2,c3-m1`). None of both means
+every module: the modular monolith. Every other module is reached through its address from
+`MODULE_URLS` / `<MODULE>_URL` (FRAMEWORK 4.7), so the same image runs as monolith or split.
 """
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
+
+from . import spec
 
 
-def enabled_modules() -> frozenset[str] | None:
-    """The module ids this process serves, or None for all of them."""
-    raw = os.environ.get("ENABLED_MODULES", "")
-    ids = frozenset(m.strip().lower() for m in raw.split(",") if m.strip())
-    return ids or None
+def _key(name: str) -> str:
+    return name.strip().lower().replace("-", "_")
 
 
-def is_enabled(module: str) -> bool:
-    ids = enabled_modules()
-    return ids is None or module in ids
+def resolve(names: Iterable[str]) -> frozenset[str]:
+    """Spec ids of features given by readable name or spec id; unknown names fail the start."""
+    wanted = {_key(n) for n in names if n.strip()}
+    known = spec.modules()
+    ids = frozenset(mid for mid, ms in known.items() if _key(mid) in wanted or ms.name in wanted)
+    unknown = wanted - {_key(mid) for mid in ids} - {known[mid].name for mid in ids}
+    if unknown:
+        raise ValueError(f"unknown features: {', '.join(sorted(unknown))}")
+    return ids
+
+
+def enabled_modules(features: Iterable[str] | None = None) -> frozenset[str] | None:
+    """The spec ids this process serves: `features` if given, else `ENABLED_FEATURES`, else None (all)."""
+    if features is None:
+        features = [n for n in os.environ.get("ENABLED_FEATURES", "").split(",") if n.strip()]
+    features = list(features)
+    return resolve(features) if features else None

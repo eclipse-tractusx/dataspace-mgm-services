@@ -3,6 +3,8 @@
 **Status:** proposed (6 Nov 2026), proof of concept with C1-M2 and C3-M1
 ([docker-compose.poc.yml](../../../docker-compose.poc.yml)).
 **Builds on:** [ADR-0001](ADR-0001-events-as-cloudevents.md) (event inbox), FRAMEWORK 1 and 4.7.
+**Extended by:** [ADR-0003](ADR-0003-feature-first-layout-and-runtimes.md): runtimes are made of features in code
+(`runtimes/`, `RUNTIME`); the selection by environment is `ENABLED_FEATURES`.
 
 ## Context
 
@@ -14,8 +16,8 @@ Operators also want to scale, release and isolate modules (for example Notificat
 
 ## Decision
 
-1. **One image, many runtimes.** The container image does not change. `ENABLED_MODULES` (comma separated ids,
-   `portal_common.runtime`) selects the modules a process serves; unset means all modules (the monolith, the
+1. **One image, many runtimes.** The container image does not change. `ENABLED_FEATURES` (comma separated readable
+   names or ids, `portal_common.runtime`; a runtime of ADR-0003 names them in code) selects the modules a process serves; unset means all modules (the monolith, the
    default). `scaffold.registry` mounts only those, together with the shared controllers (`/api/v1/events/inbox`,
    `/health`). No second code base, no per-module build.
 2. **Synchronous calls** use the existing address rule of FRAMEWORK 4.7: `MODULE_URLS` / `<MODULE>_URL` hold the
@@ -55,8 +57,8 @@ Operators also want to scale, release and isolate modules (for example Notificat
 - **Process Orchestration (C12-M1)** must run where it can reach every module by URL; as a runtime it is a normal
   module with `MODULE_URLS` for all others.
 - Latency of a neighbour call changes from a function call to an HTTP call; the pooled client and keep-alive keep it
-  low, and modules that call each other on every request are better kept in one runtime (several ids in
-  `ENABLED_MODULES`).
+  low, and modules that call each other on every request are better kept in one runtime (a hybrid runtime,
+  ADR-0003, such as `runtimes/onboarding.py`).
 
 ## NOTICE
 

@@ -28,15 +28,15 @@ import uuid
 
 import pytest
 import yaml
+from conftest import BASE, bearer, person_token
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from conftest import BASE, bearer, person_token
 from modules.c12_m1 import engine as eng
 from modules.c12_m1 import router as c12_router
 from portal_common import events, problems, spec, standin, tokens
-from portal_common.problems import Problem
 from portal_common import http as phttp
+from portal_common.problems import Problem
 from tools import test_iam
 
 COMPANY = "5b0c7a52-3f7e-4b1e-9d0a-1c2d3e4f5a6b"
@@ -409,7 +409,7 @@ def test_standin_results_follow_readme_11_3():
 
 # ---------------------------------------------------------------- in-process calls (README 4)
 def test_in_process_step_calls_the_interface_function(engine, monkeypatch):
-    from modules.c3_m1 import interface as c3_m1
+    from features.company_profile import interface as c3_m1
     seen = []
 
     def create_company(input):

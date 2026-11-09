@@ -153,20 +153,21 @@ Image of a component. Call with (dict "image" .Values.backend.image "ctx" $).
 {{- end }}
 
 {{/*
-Name of the Deployment and Service of one module runtime. Call with (dict "ctx" $ "runtime" $item).
+Name of the Deployment and Service of one runtime. Call with (dict "ctx" $ "runtime" $item).
 */}}
 {{- define "dataspace-mgm.runtime.fullname" -}}
 {{- printf "%s-rt-%s" (include "dataspace-mgm.fullname" .ctx) .runtime.name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-`MODULE_URLS`: every module of every runtime -> the service of its runtime (JSON, FRAMEWORK 4.7).
+`MODULE_URLS`: every feature of every runtime -> the service of its runtime (JSON, FRAMEWORK 4.7; readable
+names or spec ids, ADR-0003).
 */}}
 {{- define "dataspace-mgm.runtime.moduleUrls" -}}
 {{- $urls := dict }}
 {{- range $rt := .Values.runtimes.items }}
 {{- $svc := include "dataspace-mgm.runtime.fullname" (dict "ctx" $ "runtime" $rt) }}
-{{- range $m := $rt.modules }}
+{{- range $m := $rt.features }}
 {{- $_ := set $urls $m (printf "http://%s:%v" $svc $.Values.runtimes.service.port) }}
 {{- end }}
 {{- end }}

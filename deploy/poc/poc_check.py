@@ -21,14 +21,15 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: Claude Code (claude-opus-5-5)
-"""Checks the PoC of the runtime split (ADR-0002) against `docker-compose.poc.yml`.
+"""Checks the PoC of the runtime split (ADR-0002, ADR-0003) against `docker-compose.poc.yml`.
 
     docker compose -f docker-compose.yml -f docker-compose.poc.yml up -d --build
     uv run python deploy/poc/poc_check.py
 
-1. each pod serves only its module;
-2. synchronous call over HTTP: C3-M1 `create-company` asks C1-M2 (service token) and maps its 404;
-3. event over the inbox: the `CompanyDeactivated` that C3-M1 publishes arrives at C1-M2.
+1. each pod serves only its feature;
+2. synchronous call over HTTP: `create-company` of the company profile asks the registration (service
+   token) and maps its 404;
+3. event over the inbox: the `CompanyDeactivated` of the company profile arrives at the registration pod.
 Exit code 0 = green. The state is in memory: restart the pods to run it again.
 """
 from __future__ import annotations
@@ -63,24 +64,26 @@ def main() -> int:
                                   "client_secret": "test-only-service-secret"}).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     results = [
-        check("C1-M2 pod serves only c1-m2", [m["module"] for m in pod("c1-m2", "/scaffold/modules")] == ["c1-m2"]),
-        check("C3-M1 pod serves only c3-m1", [m["module"] for m in pod("c3-m1", "/scaffold/modules")] == ["c3-m1"]),
+        check("registration pod serves only the registration",
+              pod("registration", "/scaffold/modules") == [{"module": "c1-m2", "kind": "feature"}]),
+        check("company-profile pod serves only the company profile",
+              pod("company-profile", "/scaffold/modules") == [{"module": "c3-m1", "kind": "feature"}]),
     ]
     r = httpx.post(f"{GATEWAY}/api/c3-m1/steps/create-company", headers=headers, json={
         "processId": "poc", "stepRunId": "poc-1", "companyId": "c0000001-0000-4000-8000-000000000001",
         "applicationId": UNKNOWN_APPLICATION})
-    results.append(check("C3-M1 asks C1-M2 over HTTP (404 of C1-M2 mapped, no 502)",
+    results.append(check("company profile asks the registration over HTTP (its 404 mapped, no 502)",
                          r.status_code == 404 and r.json()["type"] == "urn:c3-m1:problem:not-found", r.text))
     r = httpx.post(f"{GATEWAY}/api/c3-m1/steps/deactivate-company", headers=headers, json={
         "processId": "poc", "stepRunId": "poc-2", "companyId": OSP_COMPANY, "reason": "MANUAL"})
-    results.append(check("C3-M1 step answers DONE through the gateway", r.status_code == 200, r.text))
+    results.append(check("company profile step answers DONE through the gateway", r.status_code == 200, r.text))
     arrived = []
     for _ in range(20):
-        arrived = [e for e in pod("c1-m2", "/scaffold/events")["events"] if e["type"] == "CompanyDeactivated"]
+        arrived = [e for e in pod("registration", "/scaffold/events")["events"] if e["type"] == "CompanyDeactivated"]
         if arrived:
             break
         time.sleep(0.5)
-    results.append(check("CompanyDeactivated of C3-M1 arrives at the C1-M2 pod", bool(arrived)
+    results.append(check("CompanyDeactivated of the company profile arrives at the registration pod", bool(arrived)
                          and arrived[0]["source"] == "urn:c3-m1"))
     return 0 if all(results) else 1
 

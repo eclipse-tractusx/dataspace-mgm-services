@@ -62,7 +62,8 @@ variable names, own test data and silent errors. The rules below prevent this.
 ## Call convention between modules (binding)
 
 1. Every module `modules/<id>/` (id like `c1_m2`) has `interface.py` with its public functions.
-   Other modules import ONLY from there: `from modules.c1_m2.interface import get_application_internal`.
+   Other modules import ONLY from there: `from modules.c8_m1.interface import get_offer_internal`; for a
+   migrated feature `from features.registration.interface import get_application_internal` (ADR-0003).
 2. Names: step = step name in snake_case (`create-company` → `create_company`); query =
    operationId in snake_case (`getApplicationInternal` → `get_application_internal`).
 3. Signatures: step `def create_company(input: dict) -> dict` (input = JSON body of
@@ -91,10 +92,21 @@ Operations you have not implemented yet are added from the spec (steps answer `D
 
 APIs of the installation that belong to no module live in `controllers/`, laid out as in the Industry
 Core Hub backend: one folder per API category and version, one file per controller,
-`controllers/fastapi/routers/<category>/v1/<name>_api.py` with its own `router`, mounted under
+`controllers/fastapi/routers/<category>/v1/<name>.py` with its own `router`, mounted under
 `/api/v1` by `controllers/fastapi/__init__.py`. The first one is the event inbox
 `POST /api/v1/events/inbox` (FRAMEWORK 6, OP-54): split-out modules deliver their CloudEvents there.
-Module APIs never go there; they stay in `modules/<id>/router.py` under `/api/<module>`.
+Module APIs never go there; they stay in `modules/<id>/router.py` (or `features/<name>/router.py`) under
+`/api/<module>`.
+
+## Migrated features (ADR-0003)
+
+A module that is migrated lives in `features/<name>/` under its readable name (`registration` for C1-M2,
+`company_profile` for C3-M1) instead of `modules/<id>/`; for its team that folder replaces `modules/<id>/` in
+rule 1. Every feature has the same shape: `__init__.py` (index: `NAME`, `MODULE`, `reset()`, optional
+`on_startup()` / `on_event(event)`), `router.py`, `main.py`, `interface.py` (the call convention, unchanged),
+`controllers/` (HTTP only), `services/` (business logic, no HTTP), `managers/` (state, adapters) and `models/`.
+Other modules import only `features.<name>.interface`. Runtimes in `runtimes/` import features
+(`create_runtime(registration, company_profile)`); `RUNTIME=<name> python -m runtimes` starts one.
 
 ## Definition of done
 

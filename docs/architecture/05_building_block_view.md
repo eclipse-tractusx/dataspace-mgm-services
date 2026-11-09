@@ -52,7 +52,7 @@ Each module folder contains:
 | `router.py` | HTTP routes as described in the module's `openapi.yaml` |
 
 APIs of the installation that belong to no module are in `controllers/`: one folder per API category and version,
-as in the Industry Core Hub backend (`controllers/fastapi/routers/<category>/v1/<name>_api.py`), mounted under
+as in the Industry Core Hub backend (`controllers/fastapi/routers/<category>/v1/<name>.py`), mounted under
 `/api/v1`. The first is the event inbox `POST /api/v1/events/inbox`: split-out modules deliver their events there as
 CloudEvents (structured or binary content mode, token of the service account of the publishing module; FRAMEWORK 6).
 

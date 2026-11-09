@@ -185,7 +185,7 @@ backend:
   # -- Affinity of the backend pods
   affinity: {}
 
-# One runtime (Deployment + Service) per module or group of modules, from the image of the backend (ADR-0002).
+# One runtime (Deployment + Service) per feature or group of features, from the image of the backend (ADR-0002, ADR-0003).
 # Set `backend.enabled=false` when you use it. The settings of `backend.*` (IAM, CSP, secrets, env, probes,
 # security context) apply to every runtime. The ingress of the backend routes `/api/<module>` to the runtime.
 runtimes:
@@ -196,13 +196,15 @@ runtimes:
   service:
     # -- Service port of every runtime
     port: 8000
-  # -- Runtimes: `name`, `modules` (ids served by the pod, `ENABLED_MODULES`), optional `replicaCount`,
-  # `resources` and `env`. Modules that run nowhere answer with their built-in stand-in
+  # -- Runtimes: `name`, `features` (readable names or spec ids served by the pod), optional `runtime`
+  # (`RUNTIME`: a runtime in `runtimes/` or a feature; default `installation`, which serves `features`),
+  # `replicaCount`, `resources` and `env`. Modules that run nowhere answer with their built-in stand-in
   items: []
-  # - name: registration
-  #   modules: [c1-m2]
-  # - name: company-profile
-  #   modules: [c3-m1]
+  # - name: onboarding                       # hybrid: one pod, both features
+  #   runtime: onboarding
+  #   features: [registration, company_profile]
+  # - name: process-orchestration            # not migrated yet: the installation runtime, narrowed
+  #   features: [process_orchestration]
 
 frontend:
   # -- Whether the Dataspace Management UI is installed

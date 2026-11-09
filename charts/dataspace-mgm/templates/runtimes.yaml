@@ -24,8 +24,10 @@
 #################################################################################
 
 {{- /*
-One Deployment and Service per module runtime (ADR-0002): the image of the backend, `ENABLED_MODULES` selects
-the modules of the pod, `MODULE_URLS` and `EVENT_SINKS` connect the runtimes.
+One Deployment and Service per runtime (ADR-0002, ADR-0003): the image of the backend, `RUNTIME` picks the
+runtime of the pod (`runtimes/<name>.py` or a feature's `main.py`); `features` names what it serves, for
+`MODULE_URLS` of all runtimes and as `ENABLED_FEATURES` of the `installation` runtime. `MODULE_URLS` and
+`EVENT_SINKS` connect the runtimes.
 */ -}}
 {{- if .Values.runtimes.enabled }}
 {{- $secretName := include "dataspace-mgm.backend.secretName" . }}
@@ -71,8 +73,10 @@ spec:
               containerPort: 8000
               protocol: TCP
           env:
-            - name: ENABLED_MODULES
-              value: {{ join "," $rt.modules | quote }}
+            - name: RUNTIME
+              value: {{ default "installation" $rt.runtime | quote }}
+            - name: ENABLED_FEATURES
+              value: {{ join "," $rt.features | quote }}
             - name: BASE_URL
               value: {{ printf "http://%s:%v" $name $.Values.runtimes.service.port | quote }}
             - name: MODULE_URLS
