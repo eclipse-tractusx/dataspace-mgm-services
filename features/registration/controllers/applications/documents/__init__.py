@@ -21,27 +21,4 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Registration: OSP staff manage the versions of the agreements (README 7.15, 7.16).
-"""
-from __future__ import annotations
-
-from typing import Literal
-
-from fastapi import Body
-
-from features.registration.services import agreement_service
-from features.registration.services.shared import MODULE
-from portal_common.routing import Page, Size, controller_router, permission
-
-router = controller_router(MODULE, "Registration: Agreements")
-
-
-@router.get("/osp/agreements")
-def list_agreement_versions(agreementKey: str | None = None, status: Literal["ACTIVE", "INACTIVE"] | None = None,
-                            page: int = Page, size: int = Size, _: dict = permission(MODULE, "GET", "/osp/agreements")):
-    return agreement_service.list_agreement_versions(agreementKey, status, page, size)
-
-
-@router.post("/osp/agreements", status_code=201)
-def create_agreement_version(body: dict = Body(...), claims: dict = permission(MODULE, "POST", "/osp/agreements")):
-    return agreement_service.create_agreement_version(body, claims["sub"])
+"""`/applications/{applicationId}/documents`: supporting documents of an own application."""

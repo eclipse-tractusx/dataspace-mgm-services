@@ -21,6 +21,8 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Controllers of the registration, one per use case: reference data, the applicant's applications and
-documents, the review by OSP staff, the agreements, and the process steps of Process Orchestration.
+"""HTTP API of the registration under `/api/c1-m2` (spec C1-M2), one folder per path segment.
+
+See `portal_common.routing`: every sub-folder serves one path segment (`company_roles/` -> `/company-roles`), its
+`controller.py` the operations of that path.
 """

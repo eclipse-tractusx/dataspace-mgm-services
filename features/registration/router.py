@@ -21,22 +21,11 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""HTTP API of the registration: every controller of the feature under the base path of the spec."""
+"""HTTP API of the registration: the controller tree of `controllers/` under the base path of the spec."""
 from __future__ import annotations
 
-from features.registration.controllers import (
-    agreement_management,
-    application_management,
-    application_review,
-    reference_data,
-    registration_process,
-)
-from portal_common.routing import combined_router
+from features.registration import controllers
+from features.registration.services.shared import MODULE
+from portal_common.routing import mount
 
-router = combined_router(
-    reference_data.router,
-    application_management.router,
-    application_review.router,
-    agreement_management.router,
-    registration_process.router,
-)
+router = mount(controllers, MODULE)

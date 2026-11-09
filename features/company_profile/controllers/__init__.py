@@ -21,6 +21,8 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Controllers of the company profile, one per use case: the process steps, the own company, company
-roles, change requests and their review, and the administration by OSP staff.
+"""HTTP API of the company profile under `/api/c3-m1` (spec C3-M1), one folder per path segment.
+
+See `portal_common.routing`: every sub-folder serves one path segment (`company_roles/` -> `/company-roles`), its
+`controller.py` the operations of that path.
 """

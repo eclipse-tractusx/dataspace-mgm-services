@@ -21,24 +21,11 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""HTTP API of the company profile: every controller of the feature under the base path of the spec."""
+"""HTTP API of the company profile: the controller tree of `controllers/` under the base path of the spec."""
 from __future__ import annotations
 
-from features.company_profile.controllers import (
-    change_request_management,
-    change_request_review,
-    company_administration,
-    company_management,
-    company_process,
-    company_role_management,
-)
-from portal_common.routing import combined_router
+from features.company_profile import controllers
+from features.company_profile.services.shared import MODULE
+from portal_common.routing import mount
 
-router = combined_router(
-    company_process.router,
-    company_management.router,
-    company_role_management.router,
-    change_request_management.router,
-    change_request_review.router,
-    company_administration.router,
-)
+router = mount(controllers, MODULE)

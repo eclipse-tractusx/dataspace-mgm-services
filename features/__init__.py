@@ -27,10 +27,10 @@ Every feature has the same shape, so a reader finds the same thing in the same p
 
     features/<feature>/
         __init__.py      index: NAME, MODULE (spec id) and the lifecycle hooks reset(), on_startup(), on_event()
-        router.py        `router`: every controller of the feature under the base path of the spec
+        router.py        `router = mount(controllers, MODULE)`: the controller tree under the base path
         main.py          the feature as its own runtime (one pod)
         interface.py     in-process contract (call convention): the steps and queries other features call
-        controllers/     HTTP only: token, permission, scope, then a service; one file per use case
+        controllers/     HTTP only, one folder per path segment of the API; `controller.py` per folder
         services/        business logic, shared by the controllers and the interface; no HTTP
         managers/        state and adapters: repositories, storage backends, clients of neighbours
         models/          value sets and data models of the API (when the feature has its own)

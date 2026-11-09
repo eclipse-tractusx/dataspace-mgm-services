@@ -25,10 +25,10 @@ adapters, models, and runtimes that assemble the app.
    ```text
    features/<feature>/
        __init__.py      index: NAME, MODULE (spec id), lifecycle hooks reset(), on_startup(), on_event()
-       router.py        `router`: every controller of the feature under the base path of the spec
+       router.py        `router = mount(controllers, MODULE)`: the controller tree under the base path
        main.py          the feature as its own runtime
        interface.py     in-process contract (call convention): steps and queries for other features and C12
-       controllers/     HTTP only: token, permission, scope, then a service; one file per use case
+       controllers/     HTTP only, one folder per path segment of the API; `controller.py` per folder
        services/        business logic, shared by the controllers and by interface.py; no HTTP
        managers/        state and adapters: repositories, storage backends, clients of neighbours
        models/          value sets and data models of the API (when the feature has its own)
@@ -38,14 +38,33 @@ adapters, models, and runtimes that assemble the app.
    repository, so one feature is one folder. One team owns it, reviews and tests it, and can deploy it alone.
 2. **Readable names.** The feature name is the readable part of the spec folder (`C1-M2-Registration` ->
    `registration`, `ModuleSpec.name`), and the files are named after what they do (`application_service.py`,
-   `company_repository.py`, `change_request_review.py`). The spec id stays only where the contract defines it: paths
+   `company_repository.py`, `document_service.py`). The spec id stays only where the contract defines it: paths
    (`/api/c1-m2`), Problem types (`urn:c1-m2:problem:*`), event sources, service accounts (`svc-c1-m2`).
-3. **Dependency direction.** `controllers -> services -> managers`; `models` is used by all of them; `interface.py`
+3. **Controllers mirror the URL.** `controllers/` is the base path of the spec, and every sub-folder is one path
+   segment (`_` for `-`), so the tree reads like the API:
+
+   ```text
+   controllers/                        /api/c1-m2
+       applications/                   /applications              ITEM = "applicationId"
+           controller.py               "", "/{applicationId}", "/{applicationId}/submit", ...
+           documents/controller.py     /applications/{applicationId}/documents: "", "/{documentId}"
+       osp/applications/controller.py  /osp/applications
+       steps/controller.py             /steps: "/complete-application", "/close-application"
+   ```
+
+   A `controller.py` declares `controller = Controller("<tag>")` and its operations with a path relative to the
+   folder: `""`, `"/{item}"`, `"/action"` or `"/{item}/action"`; anything deeper is a sub-folder. A folder whose
+   sub-folders belong to one item names it once in `__init__.py` (`ITEM = "applicationId"`). No path is written
+   twice: `portal_common.routing.mount()` builds the full paths, refuses an operation that is not in the
+   module's `openapi.yaml`, an action that is also a sub-folder and a folder without `__init__.py`, and binds the
+   permission of the spec operation (`x-permission`) to the parameter `claims: dict = Permission`. The rules are
+   tested in `tests/test_routing.py`.
+4. **Dependency direction.** `controllers -> services -> managers`; `models` is used by all of them; `interface.py`
    re-exports service functions. Another feature, Process Orchestration and a not-yet-migrated module import only
    `features.<name>.interface`; `tests/test_interfaces.py` enforces this for `features/` and `modules/` alike.
-   The shared building blocks of controllers (`controller_router`, `combined_router`, `permission`, paging) are in
+   The shared building blocks of controllers (`Controller`, `Permission`, `mount`, paging, `download`) are in
    `portal_common.routing`.
-4. **Runtimes are made of features** (`runtimes/`):
+5. **Runtimes are made of features** (`runtimes/`):
    - `runtimes/installation.py`: every module, the modular monolith (the default);
    - `runtimes/onboarding.py`: a **hybrid** runtime, `create_runtime(registration, company_profile)`;
    - `features/<feature>/main.py`: one feature alone;
@@ -56,15 +75,15 @@ adapters, models, and runtimes that assemble the app.
    A split runtime calls its own features in-process (`<MODULE>_URL=in-process`) and every other module over HTTP
    with the service token (`MODULE_URLS`, which also accepts readable keys such as `{"company_profile": "..."}`),
    events go through the event inbox (ADR-0002).
-5. **Discovery instead of registration.** `portal_common.layout` finds a feature by its readable name
+6. **Discovery instead of registration.** `portal_common.layout` finds a feature by its readable name
    (`features/<name>/` exists), so migrating a module needs no central list. `scaffold.registry` mounts it as kind
    `feature`, and every operation of the spec that the feature does not implement still answers from the
    spec-driven fallback.
-6. **Step by step.** A spec module without a feature package keeps running from `modules/<id>/` unchanged. Migrating
+7. **Step by step.** A spec module without a feature package keeps running from `modules/<id>/` unchanged. Migrating
    one more module means:
    1. create `features/<name>/` with the shape above, moving the code with `git mv` so its history stays;
-   2. split `interface.py` into services and managers, and `router.py` into controllers, without changing
-      behaviour;
+   2. split `interface.py` into services and managers, and `router.py` into one controller folder per path
+      segment, without changing behaviour;
    3. repoint the module's tests;
    4. delete `modules/<id>/`.
 
@@ -87,8 +106,10 @@ adapters, models, and runtimes that assemble the app.
   unchanged.
 - Hybrid or single runtimes are a deployment choice (`RUNTIME`, Helm `runtimes.items[].runtime`); moving a feature
   between pods changes no code.
-- FastAPI keeps included routers lazy, while the spec fallback reads `router.routes`, so `combined_router` copies the
-  routes of the controllers flat.
+- FastAPI decides at route creation which parameters come from the path, and keeps included routers lazy while the
+  spec fallback reads `router.routes`. So `mount()` creates every route once with its full path instead of
+  nesting routers with prefixes.
+- Swagger tags are set per controller, so several folders can share one tag (`Registration: Applications`).
 - Until every module is migrated, two layouts coexist; `portal_common.layout` hides this from the registry, the
   stand-ins and the call convention.
 

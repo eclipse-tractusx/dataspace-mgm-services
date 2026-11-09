@@ -21,8 +21,7 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Company profile: change requests of the own company (README 7.4 to 7.6), scope `company`.
-"""
+"""Change requests of the own company (README 7.4 to 7.6), scope `company`."""
 from __future__ import annotations
 
 import json
@@ -32,17 +31,15 @@ from fastapi import File, Form, UploadFile
 from features.company_profile.services import change_request_service
 from features.company_profile.services.shared import MODULE
 from portal_common.problems import Problem
-from portal_common.routing import company_scope, controller_router, permission
+from portal_common.routing import Controller, Permission, company_scope
 
-router = controller_router(MODULE, "Company Profile: Change Requests")
+controller = Controller("Company Profile: Change Requests")
 
 
-# ------------------------------------------------------------------------------ change requests (7.4 - 7.6)
-@router.post("/companies/{companyId}/change-requests", status_code=201)
+@controller.post("", status_code=201)
 def create_change_request(companyId: str, data: str = Form(...),
                           documents: list[UploadFile] = File(default=[]),
-                          claims: dict = permission(MODULE, "POST",
-                                                      "/companies/{companyId}/change-requests")):
+                          claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
     try:
         parsed = json.loads(data)
@@ -53,18 +50,13 @@ def create_change_request(companyId: str, data: str = Form(...),
     return change_request_service.create_change_request(companyId, parsed, files, claims.get("sub"))
 
 
-@router.get("/companies/{companyId}/change-requests")
-def list_own_change_requests(companyId: str, page: int = 0, size: int = 20,
-                             claims: dict = permission(MODULE, "GET",
-                                                         "/companies/{companyId}/change-requests")):
+@controller.get("")
+def list_own_change_requests(companyId: str, page: int = 0, size: int = 20, claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
     return change_request_service.list_own_change_requests(companyId, page, size)
 
 
-@router.post("/companies/{companyId}/change-requests/{changeRequestId}/withdraw")
-def withdraw_change_request(companyId: str, changeRequestId: str,
-                            claims: dict = permission(
-                                MODULE, "POST",
-                                "/companies/{companyId}/change-requests/{changeRequestId}/withdraw")):
+@controller.post("/{changeRequestId}/withdraw")
+def withdraw_change_request(companyId: str, changeRequestId: str, claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
     return change_request_service.withdraw_change_request(companyId, changeRequestId, claims.get("sub"))

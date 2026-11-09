@@ -84,7 +84,7 @@ The user interface lives in [dataspace-mgm-ui](https://github.com/eclipse-tractu
 | Folder | Content |
 |---|---|
 | `portal_common/` | shared building blocks: token validation (`tokens`), `service_token(module)`, Problem Details (`problems`), installation settings (`settings`), queries to neighbours with the error rule (`neighbours`), event relay (`events`), access to the CSP with `private_key_jwt` (`csp`), spec access (`spec`), spec-driven stand-ins (`standin`) |
-| `features/<feature>/` | migrated modules, one package per feature with `controllers/`, `services/`, `managers/`, `models/`, `router.py`, `main.py` and an index (ADR-0003); first: `registration` (C1-M2) and `company_profile` (C3-M1) |
+| `features/<feature>/` | migrated modules, one package per feature with `controllers/` (one folder per API path segment), `services/`, `managers/`, `models/`, `router.py`, `main.py` and an index (ADR-0003); first: `registration` (C1-M2) and `company_profile` (C3-M1) |
 | `runtimes/` | deployable apps made of features: `installation` (every module), the hybrid `onboarding`; `RUNTIME=<name> python -m runtimes` |
 | `modules/<module>/` | one folder per module of the spec not migrated yet (`interface.py`, `router.py`, see [Module structure](#module-structure-and-calls-between-modules)); `c12_m1` is Process Orchestration (provided), all others are stand-ins |
 | `controllers/` | APIs of the installation outside the modules, laid out as in the Industry Core Hub backend: one folder per API category and version (`controllers/fastapi/routers/<category>/v1/<name>.py`), mounted under `/api/v1`. First: the event inbox `POST /api/v1/events/inbox` (FRAMEWORK 6) |

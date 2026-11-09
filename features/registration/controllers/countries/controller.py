@@ -21,38 +21,21 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Registration: reference data for the registration form (spec C1-M2 README 7.1).
-"""
+"""Countries and their identifier types for the registration form (README 7.1)."""
 from __future__ import annotations
-
-from fastapi import Query
 
 from features.registration.models.value_sets import Lang
 from features.registration.services import reference_data_service
-from features.registration.services.shared import MODULE
-from portal_common.routing import controller_router, permission
+from portal_common.routing import Controller, Permission
 
-router = controller_router(MODULE, "Registration: Reference Data")
+controller = Controller("Registration: Reference Data")
 
 
-# ------------------------------------------------------------------------- reference data (7.1)
-@router.get("/countries")
-def list_countries(lang: Lang = "en", _: dict = permission(MODULE, "GET", "/countries")):
+@controller.get("")
+def list_countries(lang: Lang = "en", _: dict = Permission):
     return reference_data_service.list_countries(lang)
 
 
-@router.get("/countries/{countryCode}/identifier-types")
-def list_identifier_types(countryCode: str, lang: Lang = "en",
-                          _: dict = permission(MODULE, "GET", "/countries/{countryCode}/identifier-types")):
+@controller.get("/{countryCode}/identifier-types")
+def list_identifier_types(countryCode: str, lang: Lang = "en", _: dict = Permission):
     return reference_data_service.list_identifier_types(countryCode, lang)
-
-
-@router.get("/company-roles")
-def list_company_roles(lang: Lang = "en", _: dict = permission(MODULE, "GET", "/company-roles")):
-    return reference_data_service.list_company_roles(lang)
-
-
-@router.get("/agreements")
-def list_agreements(companyRole: list[str] | None = Query(None), lang: Lang = "en",
-                    _: dict = permission(MODULE, "GET", "/agreements")):
-    return reference_data_service.list_agreements(companyRole or [], lang)

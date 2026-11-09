@@ -104,7 +104,8 @@ A module that is migrated lives in `features/<name>/` under its readable name (`
 `company_profile` for C3-M1) instead of `modules/<id>/`; for its team that folder replaces `modules/<id>/` in
 rule 1. Every feature has the same shape: `__init__.py` (index: `NAME`, `MODULE`, `reset()`, optional
 `on_startup()` / `on_event(event)`), `router.py`, `main.py`, `interface.py` (the call convention, unchanged),
-`controllers/` (HTTP only), `services/` (business logic, no HTTP), `managers/` (state, adapters) and `models/`.
+`controllers/` (HTTP only; one folder per path segment of the API, each with a `controller.py` whose paths are
+relative to the folder, see `portal_common.routing`), `services/` (business logic, no HTTP), `managers/` (state, adapters) and `models/`.
 Other modules import only `features.<name>.interface`. Runtimes in `runtimes/` import features
 (`create_runtime(registration, company_profile)`); `RUNTIME=<name> python -m runtimes` starts one.
 

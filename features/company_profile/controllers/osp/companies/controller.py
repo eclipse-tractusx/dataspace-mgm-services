@@ -21,45 +21,38 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Company profile: OSP staff search, read, correct and deactivate companies (README 7.10 to 7.13).
-"""
+"""OSP staff search, read, correct and deactivate companies (README 7.10 to 7.13)."""
 from __future__ import annotations
 
 from fastapi import Body, Query
 
 from features.company_profile.services import company_lifecycle_service, company_service, company_views
-from features.company_profile.services.shared import MODULE
-from portal_common.routing import controller_router, permission
+from portal_common.routing import Controller, Permission
 
-router = controller_router(MODULE, "Company Profile: Company Administration")
+controller = Controller("Company Profile: Company Administration")
 
 
-# --------------------------------------------------------------------------- OSP staff (7.10, 7.11, 7.12)
-@router.get("/osp/companies")
+@controller.get("")
 def list_companies(status: list[str] | None = Query(None), name: str | None = None,
                    bpn: str | None = None, hasBpn: bool | None = None,
                    companyRole: str | None = None, coreDataSource: str | None = None,
                    page: int = 0, size: int = 20,
-                   _: dict = permission(MODULE, "GET", "/osp/companies")):
+                   _: dict = Permission):
     return company_service.list_companies(status=status, name=name, bpn=bpn, hasBpn=hasBpn,
                                     companyRole=companyRole, coreDataSource=coreDataSource,
                                     page=page, size=size)
 
 
-@router.get("/osp/companies/{companyId}")
-def read_company(companyId: str,
-                 _: dict = permission(MODULE, "GET", "/osp/companies/{companyId}")):
+@controller.get("/{companyId}")
+def read_company(companyId: str, _: dict = Permission):
     return company_views.company_view(companyId, detail=True)
 
 
-@router.post("/osp/companies/{companyId}/deactivate")
-def deactivate_company_by_staff(companyId: str, body: dict = Body(...),
-                                claims: dict = permission(
-                                    MODULE, "POST", "/osp/companies/{companyId}/deactivate")):
+@controller.post("/{companyId}/deactivate")
+def deactivate_company_by_staff(companyId: str, body: dict = Body(...), claims: dict = Permission):
     return company_lifecycle_service.deactivate_company_by_staff(companyId, body, claims.get("sub"))
 
 
-@router.patch("/osp/companies/{companyId}")
-def correct_company(companyId: str, body: dict = Body(...),
-                    claims: dict = permission(MODULE, "PATCH", "/osp/companies/{companyId}")):
+@controller.patch("/{companyId}")
+def correct_company(companyId: str, body: dict = Body(...), claims: dict = Permission):
     return company_service.correct_company(companyId, body, claims.get("sub"))

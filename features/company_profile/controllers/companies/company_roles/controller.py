@@ -21,37 +21,31 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""Company profile: people read and change their own company (README 7.1 to 7.3), scope `company`.
-"""
+"""The company roles of the own company (README 7.7 to 7.9), scope `company`."""
 from __future__ import annotations
 
 from fastapi import Body
 
-from features.company_profile.services import company_service, company_views
+from features.company_profile.services import company_role_service
 from features.company_profile.services.shared import MODULE
-from portal_common.routing import company_scope, controller_router, permission
+from portal_common.routing import Controller, Permission, company_scope
 
-router = controller_router(MODULE, "Company Profile: Own Company")
+controller = Controller("Company Profile: Company Roles")
 
 
-# -------------------------------------------------------------------- own company, people (7.1, 7.2)
-@router.get("/companies/{companyId}")
-def read_own_company(companyId: str,
-                     claims: dict = permission(MODULE, "GET", "/companies/{companyId}")):
+@controller.get("")
+def list_company_roles(companyId: str, lang: str | None = None, claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
-    return company_views.role_view(companyId)
+    return company_role_service.list_company_roles(companyId, lang)
 
 
-@router.post("/companies/{companyId}/attestation-updates")
-def update_from_attestation(companyId: str, body: dict = Body(...),
-                            claims: dict = permission(MODULE, "POST",
-                                                        "/companies/{companyId}/attestation-updates")):
+@controller.post("")
+def add_company_role(companyId: str, body: dict = Body(...), lang: str | None = None, claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
-    return company_service.update_company_from_attestation(companyId, body, claims.get("sub"))
+    return company_role_service.add_company_role(companyId, body, claims.get("sub"), lang)
 
 
-@router.patch("/companies/{companyId}")
-def update_own_company(companyId: str, body: dict = Body(...),
-                       claims: dict = permission(MODULE, "PATCH", "/companies/{companyId}")):
+@controller.delete("/{companyRole}")
+def remove_company_role(companyId: str, companyRole: str, lang: str | None = None, claims: dict = Permission):
     company_scope(MODULE, claims, companyId)
-    return company_service.update_company(companyId, body, claims.get("sub"))
+    return company_role_service.remove_company_role(companyId, companyRole, claims.get("sub"), lang)
