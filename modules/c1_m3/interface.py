@@ -306,6 +306,8 @@ def approve(case_id: str, sub: str, comment: str | None) -> dict:
             case.update(status="AWAITING_SECOND_APPROVAL", changedAt=now,
                         firstApproval={"approvedBy": sub, "approvedAt": now, "comment": comment,
                                        "fourEyesReasons": reasons})
+            events.publish(MODULE, "ApplicationAwaitingSecondApproval",
+                           {**_event_fields(case), "reviewCaseId": case["id"], "firstApproval": case["firstApproval"]})
         else:
             _approved(case, sub, comment)
         _audit(case, "approve", sub=sub)
