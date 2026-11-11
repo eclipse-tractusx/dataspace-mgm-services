@@ -15,6 +15,19 @@ Decisions with a full record (context, alternatives, consequences) are in [decis
 The open questions that concern several modules are tracked as OP-xx in `open-points.md` of the specification; the
 provisional decisions of each module are listed in its own `open-points.md`.
 
+## Proposed reconciliation: feature-first architecture and one quality gate
+
+For committer review, not an accepted ADR: the common concept is documented in
+[building blocks, section 5.3](05_building_block_view.md#53-proposed-target-feature-first-packages-composable-runtimes)
+and [quality requirements, sections 10.1–10.3](10_quality_requirements.md#101-proposed-common-quality-gate).
+It combines [PR #50](https://github.com/eclipse-tractusx/dataspace-mgm-services/pull/50)'s readable feature packages
+and composable runtimes with [issue #54](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/54)'s
+enforced internal boundaries and incremental quality ratchet.
+
+The recommendation is to retain PR #50's ADR-0003 for feature-first layout, extend it with the agreed dependency
+rules, and record the quality-gate policy under the next available ADR number when approved. Do not introduce a
+second ADR-0003 or a competing `modules/`-only target layout. Existing accepted rules remain in force meanwhile.
+
 ## NOTICE
 
 This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode).
