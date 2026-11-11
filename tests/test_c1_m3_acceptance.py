@@ -413,8 +413,14 @@ def test_15_four_eyes_after_failed_check(env, client):
     r = approve(client, "A2", "rolf", "AG is the new legal form, checked in the register")
     assert r.json()["status"] == "AWAITING_SECOND_APPROVAL" and r.json()["firstApproval"]["fourEyesReasons"] == ["CHECK_FAILED"]
     assert not events_of("ApplicationApproved")
+    [ev_awaiting] = events_of("ApplicationAwaitingSecondApproval")
+    assert ev_awaiting["applicationId"] == APPS["A2"]["id"]
+    assert ev_awaiting["reviewCaseId"] == case_id("A2")
+    assert ev_awaiting["firstApproval"]["approvedBy"] == R1
+    assert ev_awaiting["firstApproval"]["fourEyesReasons"] == ["CHECK_FAILED"]
     r = approve(client, "A2", "rolf")
     assert r.status_code == 200 and r.json()["status"] == "AWAITING_SECOND_APPROVAL"
+    assert len(events_of("ApplicationAwaitingSecondApproval")) == 1
     r = approve(client, "A2", "renate")
     assert r.status_code == 200 and r.json()["status"] == "APPROVED"
     assert len(events_of("ApplicationApproved")) == 1
