@@ -580,3 +580,12 @@ def test_step_over_http_with_service_token(env, client):
     r = client.post("/api/c1-m3/steps/open-review", headers=bearer(token), json=body)
     assert r.status_code == 200 and r.json()["result"]["status"] == "OPEN"
     assert client.post("/api/c1-m3/steps/open-review", headers=_h("rolf"), json=body).status_code == 403
+
+
+def test_swagger_tags_c1_m3_as_implemented_not_as_stand_in():
+    """standin.router() tags its routes "<module> (stand-in)"; the implemented C1-M3 must not show so."""
+    app = FastAPI()
+    app.include_router(router.router)
+    tags = {tag for op in app.openapi()["paths"].values() for spec in op.values() for tag in spec["tags"]}
+    assert tags == {"c1-m3 Application Review"}
+
