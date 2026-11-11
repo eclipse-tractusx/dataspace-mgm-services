@@ -79,6 +79,11 @@ def start(osp_factory, env: dict | None = None):
     osp = osp_factory({**ENV, **(env or {})}, csp=True)
     assert_reached_in_process("c4-m2", "c4-m1", "c3-m1")
     osp.csp_register(BPN, osp_id=OSP_A_ID)        # the company is registered at the CSP by C3-M2 (here: directly)
+    if neighbours.in_process("c3-m2"):
+        from modules.c3_m2 import store as c3_m2_store
+        row = c3_m2_store.registration_row(U1["id"])
+        row.status = "REGISTERED"
+        row.bpn = BPN
     return osp, osp.service("svc-c12-m1")
 
 
