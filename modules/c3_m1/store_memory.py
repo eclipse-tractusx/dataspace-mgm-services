@@ -40,6 +40,7 @@ import contextlib
 import copy
 import datetime as dt
 import hashlib
+import itertools
 import uuid
 
 from .store import (CORE_DATA_SOURCES, CHANGE_REQUEST_STATUSES, COMPANY_FIELDS, CONSENT_SOURCE_KINDS,
@@ -52,6 +53,7 @@ _identifiers: dict[str, dict[str, dict]] = {}
 _roles: dict[str, dict[str, dict]] = {}
 _consents: dict[tuple[str, str], dict] = {}
 _change_requests: dict[str, dict] = {}
+_cr_seq = itertools.count()
 _documents: dict[str, dict] = {}
 _used_attestations: dict[str, dict] = {}
 _audit: list[dict] = []
@@ -92,11 +94,13 @@ def _checked_bpn(bpn, *, company_id: str | None, status: str) -> str | None:
 
 def reset() -> None:
     """Empty every table (test helper; the PostgreSQL transport drops and recreates the schema)."""
+    global _cr_seq
     companies.clear()
     _identifiers.clear()
     _roles.clear()
     _consents.clear()
     _change_requests.clear()
+    _cr_seq = itertools.count()
     _documents.clear()
     _used_attestations.clear()
     _audit.clear()
@@ -323,13 +327,14 @@ def create_change_request(row: dict) -> dict:
         "requested_by": row.get("requested_by"), "decided_by": row.get("decided_by"),
         "decision_reason": row.get("decision_reason"),
         "created_at": row.get("created_at") or _now(), "closed_at": row.get("closed_at"),
+        "_seq": next(_cr_seq),
     }
     _change_requests[created["id"]] = created
-    return _copy(created)  # type: ignore[return-value]
+    return _copy({k: v for k, v in created.items() if not k.startswith("_")})  # type: ignore[return-value]
 
 
 def open_change_request(company_id: str) -> dict | None:
-    return next((_copy(row) for row in _change_requests.values()
+    return next((_copy({k: v for k, v in row.items() if not k.startswith("_")}) for row in _change_requests.values()
                  if row["company_id"] == company_id and row["status"] == "OPEN"), None)
 
 
@@ -343,10 +348,10 @@ def list_change_requests(*, company_id: str | None = None, status=None,
     items = [row for row in _change_requests.values()
              if (company_id is None or row["company_id"] == company_id)
              and (not statuses or row["status"] in statuses)]
-    items.sort(key=lambda row: (row["created_at"] or "", row["id"]), reverse=newest_first)
+    items.sort(key=lambda row: (row["created_at"] or "", row.get("_seq", 0)), reverse=newest_first)
     total = len(items)
     start = max(page, 0) * size
-    return [_copy(row) for row in items[start:start + size]], total  # type: ignore[misc]
+    return [_copy({k: v for k, v in row.items() if not k.startswith("_")}) for row in items[start:start + size]], total  # type: ignore[misc]
 
 
 def decide_change_request(change_request_id: str, status: str, *, decided_by: str | None = None,

@@ -25,6 +25,7 @@
 """C6-M1 Connectors: acceptance cases of README 13 with the test data of README 14 / FRAMEWORK 7a,
 over HTTP with person and service tokens, plus the interface functions in-process."""
 import threading
+import uuid
 
 import pytest
 from conftest import BASE, bearer, person_token
@@ -219,9 +220,10 @@ def test_11_customer_account_of_the_subscription(api, monkeypatch):
     from modules.c2_m3 import interface as c2_m3
     monkeypatch.setenv("C2_M3_URL", "in-process")
     c2_m3.reset()
-    tu = c2_m3.create_for_subscription({"processId": "p", "stepRunId": "s", "offerSubscriptionId": SUB,
-                                        "customerCompanyId": HOST, "providerCompanyId": PROVIDER,
-                                        "name": "edc", "roles": []})["result"]["accounts"][0]["technicalUserId"]
+    tu = c2_m3.create_for_subscription({"processId": str(uuid.uuid4()), "stepRunId": str(uuid.uuid4()),
+                                        "offerSubscriptionId": SUB, "customerCompanyId": HOST,
+                                        "providerCompanyId": PROVIDER, "name": "edc",
+                                        "roles": [{"name": "Identity Wallet Management"}]})["result"]["accounts"][0]["technicalUserId"]
     # company connector of the customer without offerSubscriptionId: C2-M3 says not usable (account still unlinked)
     assert problem(register(api, name="own", endpoint="https://own.example/dsp", technicalUserId=tu),
                    409, "technical-user-not-usable")
