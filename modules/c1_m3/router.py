@@ -37,6 +37,8 @@ from . import interface
 from .interface import MODULE
 
 router = standin.router(MODULE)
+# standin.router() tags every router "<module> (stand-in)" in Swagger; C1-M3 is implemented.
+router.tags = ["c1-m3 Application Review"]
 
 Status = Literal["OPEN", "AWAITING_SECOND_APPROVAL", "APPROVED", "DECLINED", "CLOSED"]
 Kind = Literal["ONBOARDING", "REACTIVATION", "TRANSFER"]
