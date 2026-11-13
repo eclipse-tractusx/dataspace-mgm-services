@@ -36,7 +36,9 @@ import json
 
 import pytest
 
-from modules.c3_m1 import interface, store
+from features import company_profile
+from features.company_profile import interface
+from features.company_profile.managers import company_repository
 from portal_common import events, neighbours
 from portal_common.problems import Problem
 from tools import testdata
@@ -65,7 +67,7 @@ APPLICATIONS: dict[str, dict] = {}   # applicationId -> ApplicationInternal, as 
 
 @pytest.fixture(autouse=True)
 def _state():
-    interface.reset()
+    company_profile.reset()
     yield
 
 
@@ -133,13 +135,13 @@ def test_create_company_maps_the_application():
     seed()
     reply = step("create_company", companyId=U1, applicationId=A1)
     assert reply["result"]["status"] == "REQUESTED"
-    row = store.get_company(U1)
+    row = company_repository.get_company(U1)
     assert row["core_data_source"] == "EBW"
     assert row["verification_ref"] == ATTESTATION["attestationId"]
     assert row["core_data_verified_at"] == ATTESTATION["verifiedAt"]
-    identifiers = {entry["type"]: entry["source"] for entry in store.list_identifiers(U1)}
+    identifiers = {entry["type"]: entry["source"] for entry in company_repository.list_identifiers(U1)}
     assert identifiers == {"EBWOID": "BUSINESS_WALLET", "EUID": "BUSINESS_WALLET", "VAT_ID": "DECLARED"}
-    assert store.role_status(U1, "ACTIVE_PARTICIPANT") == "REQUESTED"
+    assert company_repository.role_status(U1, "ACTIVE_PARTICIPANT") == "REQUESTED"
     assert len(published("CompanyCreated")) == 1
     assert published("CompanyCreated")[0]["data"]["coreDataSource"] == "EBW"
 
@@ -150,7 +152,7 @@ def test_create_company_is_idempotent():
     reply = step("create_company", companyId=U1, applicationId=A1)
     assert reply["state"] == "DONE"
     assert len(published("CompanyCreated")) == 1
-    assert len(store.find_companies(size=100)[0]) == 2   # seed company + U1
+    assert len(company_repository.find_companies(size=100)[0]) == 2   # seed company + U1
 
 
 def test_create_company_conflicts():
@@ -187,7 +189,7 @@ def test_create_company_needs_a_submitted_application():
 def test_create_company_writes_an_audit_entry_without_a_sub():
     seed()
     step("create_company", companyId=U1, applicationId=A1)
-    entry = store.list_audit(U1)[-1]
+    entry = company_repository.list_audit(U1)[-1]
     assert entry["sub"] == "" and entry["operation"] == "stepCreateCompany"
     assert entry["details"]["processId"] == "p-1" and entry["details"]["stepRunId"] == "s-1"
 
@@ -233,8 +235,8 @@ def test_activate_takes_over_the_consents():
     step("assign_identifier", companyId=U1, bpn="BPNLIUK2REMLK3F4")
     reply = step("activate_company", companyId=U1, applicationId=A1)
     assert reply["result"]["status"] == "ACTIVE"
-    assert store.role_status(U1, "ACTIVE_PARTICIPANT") == "ACTIVE"
-    consents = {c["agreement_key"]: c for c in store.list_consents(U1)}
+    assert company_repository.role_status(U1, "ACTIVE_PARTICIPANT") == "ACTIVE"
+    consents = {c["agreement_key"]: c for c in company_repository.list_consents(U1)}
     assert consents["terms-active-participant"]["consented_by"] == P1
     assert consents["terms-active-participant"]["source_kind"] == "APPLICATION"
     assert len(published("CompanyActivated")) == 1
@@ -249,7 +251,7 @@ def test_activate_without_consents_keeps_requested():
     with pytest.raises(Problem) as error:
         step("activate_company", companyId=U3, applicationId=A3)
     assert error.value.status == 409 and error.value.name == "roles-without-consent"
-    assert store.get_company(U3)["status"] == "REQUESTED"
+    assert company_repository.get_company(U3)["status"] == "REQUESTED"
 
 
 # ---------------------------------------------------------------------------------- 13.6, 13.7
@@ -320,13 +322,13 @@ def test_the_built_in_stand_in_reads_the_stub_file(tmp_path, monkeypatch):
     step("assign_identifier", companyId=U1, bpn="BPNLIUK2REMLK3F4")
     reply = step("activate_company", companyId=U1, applicationId=A1)
     assert reply["result"]["status"] == "ACTIVE"
-    assert store.role_status(U1, "ACTIVE_PARTICIPANT") == "ACTIVE"
+    assert company_repository.role_status(U1, "ACTIVE_PARTICIPANT") == "ACTIVE"
 
 
 # --------------------------------------------------------------------------------------------- 13.25
 def test_the_seed_company_is_there_after_reset():
-    row = store.get_company("11111111-1111-4111-8111-111111111111")
+    row = company_repository.get_company("11111111-1111-4111-8111-111111111111")
     assert row["status"] == "ACTIVE" and row["bpn"] == "BPNL00000000OSPA"
-    assert set(store.list_roles(row["id"])) == {"ONBOARDING_SERVICE_PROVIDER", "ACTIVE_PARTICIPANT",
+    assert set(company_repository.list_roles(row["id"])) == {"ONBOARDING_SERVICE_PROVIDER", "ACTIVE_PARTICIPANT",
                                                 "APP_PROVIDER", "SERVICE_PROVIDER"}
     assert events.RELAY.log == []

@@ -27,15 +27,16 @@
 Tokens come from the in-memory test IAM of the scaffold; permissions are read from the spec there.
 """
 import pytest
+from conftest import BASE, bearer, person_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from modules.c3_m1 import interface, router as c3_router
+from features import company_profile
+from features.company_profile.managers import company_repository
+from features.company_profile.router import router as company_profile_router
 from portal_common import http as phttp
 from portal_common import problems, standin
 from tools import test_iam
-
-from conftest import BASE, bearer, person_token
 
 U1 = "c0000001-0000-4000-8000-000000000001"
 U2 = "c0000002-0000-4000-8000-000000000002"
@@ -48,10 +49,10 @@ def client() -> TestClient:
     app = FastAPI()
     problems.install(app)
     app.include_router(test_iam.router)
-    app.include_router(c3_router.router)
-    app.include_router(standin.fallback_router(c3_router.MODULE, c3_router.router))   # as scaffold/app.py
+    app.include_router(company_profile_router)
+    app.include_router(standin.fallback_router(company_profile.MODULE, company_profile_router))   # as scaffold/app.py
     phttp.register_local(BASE, app)
-    interface.reset()
+    company_profile.reset()
     return TestClient(app, base_url=BASE)
 
 
@@ -98,67 +99,67 @@ def call(client: TestClient, method: str, path: str, person: str | None = None, 
 
 # ---------------------------------------------------------------------------------------- 13.8, 13.9
 def test_the_scope_hides_other_companies(client, active):
-    response = call(client, "GET", f"/api/c3-m1/companies/{U1}", P1)
+    response = call(client, "GET", f"/api/company-profile/companies/{U1}", P1)
     assert response.status_code == 200 and response.json()["dataspaceName"] == "Catena-X"
-    assert call(client, "GET", f"/api/c3-m1/companies/{U2}", P1).status_code == 404
-    assert call(client, "GET", f"/api/c3-m1/companies/{U1}", P3).status_code == 404
-    assert call(client, "GET", f"/api/c3-m1/companies/{U1}", P4).status_code == 403
-    assert call(client, "GET", "/api/c3-m1/companies/c0000009-0000-4000-8000-000000000009",
+    assert call(client, "GET", f"/api/company-profile/companies/{U2}", P1).status_code == 404
+    assert call(client, "GET", f"/api/company-profile/companies/{U1}", P3).status_code == 404
+    assert call(client, "GET", f"/api/company-profile/companies/{U1}", P4).status_code == 403
+    assert call(client, "GET", "/api/company-profile/companies/c0000009-0000-4000-8000-000000000009",
                 P1).status_code == 404
-    response = call(client, "GET", f"/api/c3-m1/companies/{U1}", P2)
+    response = call(client, "GET", f"/api/company-profile/companies/{U1}", P2)
     assert response.status_code == 200 and response.json()["id"] == U1
     assert response.json()["createdAt"]
 
 
 def test_a_member_may_read_but_not_patch(client, active):
-    assert call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P2,
+    assert call(client, "PATCH", f"/api/company-profile/companies/{U1}", P2,
                 json={"shortName": "x"}).status_code == 403
 
 
 # ------------------------------------------------------------------------------------------ 13.10
 def test_the_short_name_is_changed_and_locked_fields_refused(client, active):
-    assert len(interface.store.list_audit(U1)) > 0
-    response = call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P1,
+    assert len(company_repository.list_audit(U1)) > 0
+    response = call(client, "PATCH", f"/api/company-profile/companies/{U1}", P1,
                     json={"shortName": "BMW"})
     assert response.status_code == 200 and response.json()["shortName"] == "BMW"
-    audit = interface.store.list_audit(U1)[-1]
+    audit = company_repository.list_audit(U1)[-1]
     assert audit["sub"] == "5a1c0001-0000-4000-8000-000000000001"
     assert audit["details"]["old"]["short_name"] is None
 
-    response = call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P1,
+    response = call(client, "PATCH", f"/api/company-profile/companies/{U1}", P1,
                     json={"shortName": "BMW"})
     assert response.status_code == 200
 
-    response = call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P1, json={"name": "Neu AG"})
+    response = call(client, "PATCH", f"/api/company-profile/companies/{U1}", P1, json={"name": "Neu AG"})
     assert response.status_code == 409 and response.json()["type"].endswith("field-locked")
     assert response.json()["fields"] == ["name"]
 
 
 # ------------------------------------------------------------------------------------- 13.17, 13.18
 def test_osp_permissions_do_not_overlap(client, active):
-    assert call(client, "GET", "/api/c3-m1/osp/change-requests", P1).status_code == 403
-    assert call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S1, json={}).status_code == 403
+    assert call(client, "GET", "/api/company-profile/osp/change-requests", P1).status_code == 403
+    assert call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S1, json={}).status_code == 403
 
 
 def test_the_osp_correction_switches_the_source_to_manual(client, active):
-    response = call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    response = call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
                     json={"address": {"street": "Neue Straße", "houseNumber": "9"}, "reason": "Hinweis"})
     assert response.status_code == 200
     body = response.json()
     assert body["address"]["street"] == "Neue Straße" and body["address"]["countryCode"] == "DE"
     assert body["coreDataSource"] == "MANUAL" and body["verificationRef"] is None
     assert body["coreDataVerifiedAt"] is not None
-    assert [e for e in interface.store.list_audit(U1) if e["operation"] == "correctCompany"]
+    assert [e for e in company_repository.list_audit(U1) if e["operation"] == "correctCompany"]
 
 
 def test_the_country_is_locked_after_the_bpn(client, active):
-    response = call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    response = call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
                     json={"countryCode": "US", "reason": "Umzug"})
     assert response.status_code == 409 and response.json()["fields"] == ["countryCode"]
 
 
 def test_a_business_wallet_identifier_needs_the_attestation(client, active):
-    response = call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    response = call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
                     json={"identifiers": [{"type": "EBWOID", "value": "EBWOID-DE-0000000009"},
                                           {"type": "VAT_ID", "value": "DE123456789"}],
                           "reason": "Korrektur"})
@@ -167,24 +168,24 @@ def test_a_business_wallet_identifier_needs_the_attestation(client, active):
 
 
 def test_a_correction_without_a_reason_is_a_validation_error(client, active):
-    response = call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    response = call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
                     json={"shortName": "X"})
     assert response.status_code == 400 and response.json()["type"].endswith("validation")
 
 
 # ------------------------------------------------------------------------------- 7.10, 9.2, 9.3, 9.4
 def test_the_search_filters_over_http(client, active):
-    response = call(client, "GET", "/api/c3-m1/osp/companies?status=ACTIVE&hasBpn=true", S1)
+    response = call(client, "GET", "/api/company-profile/osp/companies?status=ACTIVE&hasBpn=true", S1)
     assert response.status_code == 200
     ids = [item["id"] for item in response.json()["items"]]
     assert U1 in ids and U2 in ids
     assert response.json()["total"] >= 2
-    assert call(client, "GET", "/api/c3-m1/osp/companies?status=nope", S1).status_code == 400
+    assert call(client, "GET", "/api/company-profile/osp/companies?status=nope", S1).status_code == 400
 
 
 def test_the_bulk_query_takes_repeated_parameters(client, active):
     response = call(client, "GET",
-                    f"/api/c3-m1/internal/companies?id={U2}&id={U1}&id=c0000009-0000-4000-8000-000000000009",
+                    f"/api/company-profile/internal/companies?id={U2}&id={U1}&id=c0000009-0000-4000-8000-000000000009",
                     "svc")
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [U2, U1]
@@ -192,14 +193,14 @@ def test_the_bulk_query_takes_repeated_parameters(client, active):
 
 
 def test_the_identifier_search_over_http(client, active):
-    response = call(client, "POST", "/api/c3-m1/internal/companies/identifier-matches", "svc",
+    response = call(client, "POST", "/api/company-profile/internal/companies/identifier-matches", "svc",
                     json={"identifiers": [{"type": "VAT_ID", "value": "de 123.456.789"}]})
     assert response.status_code == 200
     assert [match["companyId"] for match in response.json()["matches"]] == [U1]
 
 
 def test_the_role_catalogue_is_a_query(client, active):
-    response = call(client, "GET", "/api/c3-m1/internal/company-roles?lang=de", "svc")
+    response = call(client, "GET", "/api/company-profile/internal/company-roles?lang=de", "svc")
     assert response.status_code == 200 and isinstance(response.json(), list)
     roles = {role["companyRole"]: role for role in response.json()}
     assert roles["ACTIVE_PARTICIPANT"]["assignableBy"] == "COMPANY"
@@ -207,8 +208,11 @@ def test_the_role_catalogue_is_a_query(client, active):
 
 
 def test_swagger_tags_c3_m1_as_implemented_not_as_stand_in():
-    """standin.router() tags its routes "<module> (stand-in)"; the implemented C3-M1 must not show so."""
+    """Mounted as `scaffold.app` does, with the spec fallback: every C3-M1 route carries the tag of its
+    Company Profile controller, none the "c3-m1 (stand-in)" tag of an unimplemented operation (#51)."""
     app = FastAPI()
-    app.include_router(c3_router.router)
-    tags = {tag for op in app.openapi()["paths"].values() for spec in op.values() for tag in spec["tags"]}
-    assert tags == {"c3-m1 Company Profile"}
+    app.include_router(company_profile_router)
+    app.include_router(standin.fallback_router("c3-m1", company_profile_router))
+    tags = {tag for path, ops in app.openapi()["paths"].items() if path.startswith("/api/company-profile")
+            for op in ops.values() for tag in op["tags"]}
+    assert tags and all(tag.startswith("Company Profile: ") for tag in tags), tags

@@ -27,7 +27,7 @@
 Layout as in the Industry Core Hub backend: one folder per API category under `routers/`, one
 folder per version, one file per controller with its own `router`:
 
-    controllers/fastapi/routers/<category>/v1/<name>_api.py   router = APIRouter(prefix="/<category>")
+    controllers/fastapi/routers/<category>/v1/<feature>.py   router = APIRouter(prefix="/<category>")
 
 `include(app)` mounts every controller under `/api/v1`, e.g. `POST /api/v1/events/inbox`. The APIs of
 the modules stay in `modules/<id>/router.py` under `/api/<module>` (FRAMEWORK 4.1); a new category
@@ -37,12 +37,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
 
-from .routers.events.v1 import inbox_api
+from .routers.events.v1 import inbox
 
 API_V1 = "/api/v1"
 
 TAGS = [
-    {"name": inbox_api.TAG,
+    {"name": inbox.TAG,
      "description": "Event inbox of the installation: receives the CloudEvents of split-out modules over HTTP "
                     "(FRAMEWORK 6, proposal OP-54)"},
 ]
@@ -50,7 +50,7 @@ TAGS = [
 
 def v1_router() -> APIRouter:
     router = APIRouter(prefix=API_V1)
-    router.include_router(inbox_api.router)
+    router.include_router(inbox.router)
     return router
 
 

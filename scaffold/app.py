@@ -38,13 +38,13 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+from collections.abc import Iterable
 from typing import Annotated
 
 from fastapi import FastAPI, Query
 
 from controllers.fastapi import include as include_controllers
-from portal_common import csp, events, http, problems, settings, standin, tokens
-
+from portal_common import csp, events, http, problems, runtime, settings, standin, tokens
 from tools import iam_backend
 
 from . import registry
@@ -81,10 +81,15 @@ def reset_all(entries) -> None:
     _ = ebw_signer  # the signing key stays, so attestations issued before a reset stay valid
 
 
-def create_app() -> FastAPI:
+def create_app(features: Iterable[str] | None = None) -> FastAPI:
+    """The installation app with `features` (readable names or spec ids, `runtimes/`), else the
+    features of `ENABLED_FEATURES`, else every module."""
     settings.load()
     _defaults()
-    entries = registry.load()
+    enabled = runtime.enabled_modules(features)
+    for mid in enabled or ():   # a split runtime calls its own features in-process, whatever MODULE_URLS says
+        os.environ.setdefault(mid.upper().replace("-", "_") + "_URL", "in-process")
+    entries = registry.load(enabled)
     events.RELAY.clear_subscribers()
 
     @contextlib.asynccontextmanager

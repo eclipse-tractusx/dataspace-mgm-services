@@ -29,8 +29,8 @@ import json
 
 import pytest
 
-from modules.c3_m1 import store
-from modules.c3_m1 import validation as v
+from features.company_profile.managers import company_repository
+from features.company_profile.services import company_validation as v
 from portal_common import settings
 
 _ids = itertools.count(1)
@@ -38,9 +38,9 @@ _ids = itertools.count(1)
 
 @pytest.fixture(autouse=True)
 def _empty_store():
-    store.reset()
+    company_repository.reset()
     yield
-    store.reset()
+    company_repository.reset()
 
 
 @pytest.fixture
@@ -52,27 +52,27 @@ def make():
                "street": "Musterstraße 1", "city": "Stuttgart", "country_code": "DE",
                "status": "ACTIVE"}
         row.update(fields)
-        return store.create_company(row)
+        return company_repository.create_company(row)
     return _make
 
 
 # ------------------------------------------------------------------------------- company (5)
 def test_get_company_returns_a_copy(make):
     company = make()
-    fetched = store.get_company(company["id"])
+    fetched = company_repository.get_company(company["id"])
     fetched["name"] = "geändert"
-    assert store.get_company(company["id"])["name"] == company["name"]
-    assert store.get_company("unknown") is None
+    assert company_repository.get_company(company["id"])["name"] == company["name"]
+    assert company_repository.get_company("unknown") is None
 
 
 def test_create_company_fills_defaults_and_timestamps(make):
-    company = store.create_company({"id": "c0000001-0000-4000-8000-000000000001", "name": "A",
+    company = company_repository.create_company({"id": "c0000001-0000-4000-8000-000000000001", "name": "A",
                                     "street": "Weg 1", "city": "Stadt", "country_code": "DE"})
     assert company["status"] == "REQUESTED"
     assert company["core_data_source"] == "MANUAL"
     assert company["bpn"] is None
     assert company["created_at"] and company["changed_at"]
-    assert set(company) == set(store.COMPANY_FIELDS)
+    assert set(company) == set(company_repository.COMPANY_FIELDS)
 
 
 def test_create_company_rejects_unknown_field(make):
@@ -82,10 +82,10 @@ def test_create_company_rejects_unknown_field(make):
 
 def test_update_company_sets_changed_at_and_returns_none_for_unknown(make):
     company = make()
-    changed = store.update_company(company["id"], short_name="Kurz")
+    changed = company_repository.update_company(company["id"], short_name="Kurz")
     assert changed["short_name"] == "Kurz"
     assert changed["changed_at"] >= company["changed_at"]
-    assert store.update_company("unknown", short_name="x") is None
+    assert company_repository.update_company("unknown", short_name="x") is None
 
 
 def test_bpn_is_stored_in_upper_case(make):
@@ -101,20 +101,20 @@ def test_bpn_is_unique_among_companies_that_are_not_rejected(make):
 def test_bpn_of_a_rejected_company_frees_it(make):
     rejected = make(bpn="BPNL00000000AAAA", status="REJECTED")
     assert make(bpn="BPNL00000000AAAA")["bpn"] == "BPNL00000000AAAA"
-    assert store.get_company(rejected["id"])["bpn"] == "BPNL00000000AAAA"
+    assert company_repository.get_company(rejected["id"])["bpn"] == "BPNL00000000AAAA"
 
 
 def test_reactivating_a_rejected_company_takes_a_free_bpn(make):
     rejected = make(bpn="BPNL00000000AAAA", status="REJECTED")
     other = make()
-    assert store.update_company(rejected["id"], status="ACTIVE", bpn="BPNL00000000AAAA")
+    assert company_repository.update_company(rejected["id"], status="ACTIVE", bpn="BPNL00000000AAAA")
     with pytest.raises(ValueError):
-        store.update_company(other["id"], bpn="BPNL00000000AAAA")
+        company_repository.update_company(other["id"], bpn="BPNL00000000AAAA")
 
 
 def test_rejecting_a_company_keeps_its_bpn(make):
     company = make(bpn="BPNL00000000AAAA")
-    assert store.update_company(company["id"], status="REJECTED")["bpn"] == "BPNL00000000AAAA"
+    assert company_repository.update_company(company["id"], status="REJECTED")["bpn"] == "BPNL00000000AAAA"
 
 
 def test_status_enum_is_enforced(make):
@@ -122,7 +122,7 @@ def test_status_enum_is_enforced(make):
         make(status="DELETED")
     company = make()
     with pytest.raises(ValueError):
-        store.update_company(company["id"], status="DELETED")
+        company_repository.update_company(company["id"], status="DELETED")
 
 
 def test_core_data_source_enum_is_enforced(make):
@@ -136,237 +136,237 @@ def test_deactivation_reason_enum_and_state_are_enforced(make):
     with pytest.raises(ValueError):
         make(status="ACTIVE", deactivation_reason="MANUAL")
     company = make()
-    assert store.update_company(company["id"], status="INACTIVE",
+    assert company_repository.update_company(company["id"], status="INACTIVE",
                                 deactivation_reason="MANUAL")["deactivation_reason"] == "MANUAL"
     with pytest.raises(ValueError):
-        store.update_company(company["id"], status="ACTIVE")
+        company_repository.update_company(company["id"], status="ACTIVE")
 
 
 def test_find_companies_filters(make):
     active = make(bpn="BPNL00000000AAAA", core_data_source="EBW")
     make(name="Andere Logistik GmbH", status="REQUESTED")
     make(status="REJECTED")
-    assert [c["id"] for c in store.find_companies(status="REQUESTED")[0]] != []
-    assert all(c["status"] == "REQUESTED" for c in store.find_companies(status=["REQUESTED"])[0])
-    found, total = store.find_companies(name="logistik")
+    assert [c["id"] for c in company_repository.find_companies(status="REQUESTED")[0]] != []
+    assert all(c["status"] == "REQUESTED" for c in company_repository.find_companies(status=["REQUESTED"])[0])
+    found, total = company_repository.find_companies(name="logistik")
     assert total == 1 and found[0]["name"] == "Andere Logistik GmbH"
-    assert [c["id"] for c in store.find_companies(bpn="bpnl00000000aaaa")[0]] == [active["id"]]
-    assert all(c["bpn"] for c in store.find_companies(has_bpn=True)[0])
-    assert all(not c["bpn"] for c in store.find_companies(has_bpn=False)[0])
-    assert all(c["core_data_source"] == "EBW" for c in store.find_companies(core_data_source="EBW")[0])
+    assert [c["id"] for c in company_repository.find_companies(bpn="bpnl00000000aaaa")[0]] == [active["id"]]
+    assert all(c["bpn"] for c in company_repository.find_companies(has_bpn=True)[0])
+    assert all(not c["bpn"] for c in company_repository.find_companies(has_bpn=False)[0])
+    assert all(c["core_data_source"] == "EBW" for c in company_repository.find_companies(core_data_source="EBW")[0])
 
 
 def test_find_companies_company_role_matches_active_roles_only(make):
     company = make()
     other = make()
-    store.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ACTIVE")
-    store.add_role(other["id"], "APP_PROVIDER", status="REQUESTED")
-    found, total = store.find_companies(company_role="ACTIVE_PARTICIPANT")
+    company_repository.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ACTIVE")
+    company_repository.add_role(other["id"], "APP_PROVIDER", status="REQUESTED")
+    found, total = company_repository.find_companies(company_role="ACTIVE_PARTICIPANT")
     assert total == 1 and found[0]["id"] == company["id"]
-    assert store.find_companies(company_role="APP_PROVIDER")[1] == 0
+    assert company_repository.find_companies(company_role="APP_PROVIDER")[1] == 0
 
 
 def test_find_companies_is_newest_first_and_paged(make):
     companies = [make() for _ in range(5)]
-    items, total = store.find_companies(page=0, size=2)
+    items, total = company_repository.find_companies(page=0, size=2)
     assert total == 5 and len(items) == 2
     assert items[0]["id"] == companies[-1]["id"]      # newest first (7.10)
-    rest, _ = store.find_companies(page=2, size=2)
+    rest, _ = company_repository.find_companies(page=2, size=2)
     assert len(rest) == 1
 
 
 # --------------------------------------------------------------------------- identifiers (5, 6.4)
 def test_set_identifiers_normalises_and_replaces(make):
     company = make()
-    rows = store.set_identifiers(company["id"], [
+    rows = company_repository.set_identifiers(company["id"], [
         {"type": "VAT_ID", "value": "de 123.456.789", "source": "DECLARED"},
         {"type": "EUID", "value": "DEXX001T.HRB100001", "source": "BUSINESS_WALLET"},
     ])
     assert {row["type"] for row in rows} == {"VAT_ID", "EUID"}
-    by_type = {row["type"]: row for row in store.list_identifiers(company["id"])}
+    by_type = {row["type"]: row for row in company_repository.list_identifiers(company["id"])}
     assert by_type["VAT_ID"]["value_normalized"] == "DE123456789"
-    store.set_identifiers(company["id"], [{"type": "LEI_CODE", "value": "A" * 20}])
-    assert [row["type"] for row in store.list_identifiers(company["id"])] == ["LEI_CODE"]
+    company_repository.set_identifiers(company["id"], [{"type": "LEI_CODE", "value": "A" * 20}])
+    assert [row["type"] for row in company_repository.list_identifiers(company["id"])] == ["LEI_CODE"]
 
 
 def test_set_identifiers_enforces_one_per_type(make):
     company = make()
     with pytest.raises(ValueError):
-        store.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789"},
+        company_repository.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789"},
                                              {"type": "VAT_ID", "value": "DE987654321"}])
 
 
 def test_set_identifiers_enforces_the_enums(make):
     company = make()
     with pytest.raises(ValueError):
-        store.set_identifiers(company["id"], [{"type": "VIES", "value": "DE123456789"}])
+        company_repository.set_identifiers(company["id"], [{"type": "VIES", "value": "DE123456789"}])
     with pytest.raises(ValueError):
-        store.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789",
+        company_repository.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789",
                                               "source": "ATTESTATION"}])
 
 
 def test_set_identifiers_needs_a_known_company():
     with pytest.raises(ValueError):
-        store.set_identifiers("unknown", [{"type": "VAT_ID", "value": "DE123456789"}])
+        company_repository.set_identifiers("unknown", [{"type": "VAT_ID", "value": "DE123456789"}])
 
 
 # --------------------------------------------------------------------------------- roles (6.5)
 def test_roles_report_status_and_none(make):
     company = make()
-    assert store.role_status(company["id"], "APP_PROVIDER") == "NONE"
-    store.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ACTIVE")
-    store.add_role(company["id"], "APP_PROVIDER", status="REQUESTED", source_kind="APPLICATION",
+    assert company_repository.role_status(company["id"], "APP_PROVIDER") == "NONE"
+    company_repository.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ACTIVE")
+    company_repository.add_role(company["id"], "APP_PROVIDER", status="REQUESTED", source_kind="APPLICATION",
                    source_ref="a0000001-0000-4000-8000-000000000001")
-    assert store.list_roles(company["id"]) == {"ACTIVE_PARTICIPANT": "ACTIVE",
+    assert company_repository.list_roles(company["id"]) == {"ACTIVE_PARTICIPANT": "ACTIVE",
                                                "APP_PROVIDER": "REQUESTED"}
-    store.remove_role(company["id"], "APP_PROVIDER")
-    assert store.role_status(company["id"], "APP_PROVIDER") == "INACTIVE"
-    assert store.get_role(company["id"], "APP_PROVIDER")["deactivated_at"]
-    assert store.remove_role(company["id"], "SERVICE_PROVIDER") is None
+    company_repository.remove_role(company["id"], "APP_PROVIDER")
+    assert company_repository.role_status(company["id"], "APP_PROVIDER") == "INACTIVE"
+    assert company_repository.get_role(company["id"], "APP_PROVIDER")["deactivated_at"]
+    assert company_repository.remove_role(company["id"], "SERVICE_PROVIDER") is None
 
 
 def test_add_role_enforces_the_enums(make):
     company = make()
     with pytest.raises(ValueError):
-        store.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ADDED")
+        company_repository.add_role(company["id"], "ACTIVE_PARTICIPANT", status="ADDED")
     with pytest.raises(ValueError):
-        store.add_role(company["id"], "ACTIVE_PARTICIPANT", source_kind="FLOW")
+        company_repository.add_role(company["id"], "ACTIVE_PARTICIPANT", source_kind="FLOW")
 
 
 # -------------------------------------------------------------------------------- consents (5)
 def test_consents_are_keyed_by_company_and_key(make):
     company = make()
-    store.set_consent(company["id"], "terms-active-participant", version="1.0",
+    company_repository.set_consent(company["id"], "terms-active-participant", version="1.0",
                       source_kind="COMPANY", consented_by="sub")
-    store.set_consent(company["id"], "terms-active-participant", version="1.0", status="INACTIVE")
-    store.set_consent(company["id"], "security-regulations", version="1.0")
-    consent = store.get_consent(company["id"], "terms-active-participant")
+    company_repository.set_consent(company["id"], "terms-active-participant", version="1.0", status="INACTIVE")
+    company_repository.set_consent(company["id"], "security-regulations", version="1.0")
+    consent = company_repository.get_consent(company["id"], "terms-active-participant")
     assert consent["status"] == "INACTIVE" and consent["agreement_version"] == "1.0"
-    assert len(store.list_consents(company["id"])) == 2
-    assert store.get_consent(company["id"], "unknown") is None
+    assert len(company_repository.list_consents(company["id"])) == 2
+    assert company_repository.get_consent(company["id"], "unknown") is None
 
 
 # ------------------------------------------------------------------------- change requests (5, 7)
 def test_at_most_one_open_change_request_per_company(make):
     company = make()
-    first = store.create_change_request({"company_id": company["id"], "comment": "neu",
+    first = company_repository.create_change_request({"company_id": company["id"], "comment": "neu",
                                          "requested_by": "sub"})
     with pytest.raises(ValueError):
-        store.create_change_request({"company_id": company["id"], "comment": "nochmal"})
-    store.withdraw_change_request(first["id"])
-    assert store.create_change_request({"company_id": company["id"], "comment": "neu"})
-    assert store.get_change_request(first["id"])["status"] == "WITHDRAWN"
+        company_repository.create_change_request({"company_id": company["id"], "comment": "nochmal"})
+    company_repository.withdraw_change_request(first["id"])
+    assert company_repository.create_change_request({"company_id": company["id"], "comment": "neu"})
+    assert company_repository.get_change_request(first["id"])["status"] == "WITHDRAWN"
 
 
 def test_a_closed_request_does_not_block_another_company(make):
     a, b = make(), make()
-    store.create_change_request({"company_id": a["id"]})
-    assert store.create_change_request({"company_id": b["id"]})["status"] == "OPEN"
+    company_repository.create_change_request({"company_id": a["id"]})
+    assert company_repository.create_change_request({"company_id": b["id"]})["status"] == "OPEN"
 
 
 def test_decide_requires_open_and_a_reason_for_declined(make):
     company = make()
-    request = store.create_change_request({"company_id": company["id"], "comment": "c"})
+    request = company_repository.create_change_request({"company_id": company["id"], "comment": "c"})
     with pytest.raises(ValueError):
-        store.decide_change_request(request["id"], "DECLINED", decided_by="sub")
-    decided = store.decide_change_request(request["id"], "DECLINED", decided_by="sub",
+        company_repository.decide_change_request(request["id"], "DECLINED", decided_by="sub")
+    decided = company_repository.decide_change_request(request["id"], "DECLINED", decided_by="sub",
                                           decision_reason="fehlt")
     assert decided["status"] == "DECLINED" and decided["decided_by"] == "sub"
     assert decided["closed_at"]
     with pytest.raises(ValueError):
-        store.decide_change_request(request["id"], "APPROVED")
+        company_repository.decide_change_request(request["id"], "APPROVED")
 
 
 def test_decide_enforces_the_decision_status(make):
     company = make()
-    request = store.create_change_request({"company_id": company["id"]})
+    request = company_repository.create_change_request({"company_id": company["id"]})
     with pytest.raises(ValueError):
-        store.decide_change_request(request["id"], "WITHDRAWN")
-    assert store.decide_change_request("unknown", "APPROVED") is None
+        company_repository.decide_change_request(request["id"], "WITHDRAWN")
+    assert company_repository.decide_change_request("unknown", "APPROVED") is None
 
 
 def test_list_change_requests_filters_and_order(make):
     company = make()
-    first = store.create_change_request({"company_id": company["id"], "comment": "1"})
-    store.withdraw_change_request(first["id"])
-    second = store.create_change_request({"company_id": company["id"], "comment": "2",
+    first = company_repository.create_change_request({"company_id": company["id"], "comment": "1"})
+    company_repository.withdraw_change_request(first["id"])
+    second = company_repository.create_change_request({"company_id": company["id"], "comment": "2",
                                          "changes": {"name": "Neu"}})
-    items, total = store.list_change_requests(company_id=company["id"])
+    items, total = company_repository.list_change_requests(company_id=company["id"])
     assert total == 2 and [row["id"] for row in items] == [first["id"], second["id"]]
-    newest, _ = store.list_change_requests(company_id=company["id"], newest_first=True)
+    newest, _ = company_repository.list_change_requests(company_id=company["id"], newest_first=True)
     assert newest[0]["id"] == second["id"]
-    assert store.list_change_requests(status="OPEN")[1] == 1
+    assert company_repository.list_change_requests(status="OPEN")[1] == 1
     assert items[1]["changes"] == {"name": "Neu"}
 
 
 # ------------------------------------------------------------------------------ documents (5)
 def test_documents_are_stored_with_checksum(make):
     company = make()
-    request = store.create_change_request({"company_id": company["id"]})
-    document = store.add_document(request["id"], file_name="auszug.pdf",
+    request = company_repository.create_change_request({"company_id": company["id"]})
+    document = company_repository.add_document(request["id"], file_name="auszug.pdf",
                                   media_type="application/pdf", content=b"%PDF-1.7 test")
     assert document["size_bytes"] == len(b"%PDF-1.7 test")
     assert len(document["sha256"]) == 64
-    assert store.get_document(document["id"])["file_name"] == "auszug.pdf"
-    assert len(store.list_documents(request["id"])) == 1
+    assert company_repository.get_document(document["id"])["file_name"] == "auszug.pdf"
+    assert len(company_repository.list_documents(request["id"])) == 1
     with pytest.raises(ValueError):
-        store.add_document(request["id"], file_name="x.txt", media_type="text/plain",
+        company_repository.add_document(request["id"], file_name="x.txt", media_type="text/plain",
                            content=b"x")
     with pytest.raises(ValueError):
-        store.add_document("unknown", file_name="x.pdf", media_type="application/pdf")
+        company_repository.add_document("unknown", file_name="x.pdf", media_type="application/pdf")
 
 
 # ------------------------------------------------------------------------ used attestation (5)
 def test_an_attestation_is_used_exactly_once(make):
     company = make()
-    assert store.add_if_unused("jti-1", company["id"]) is True
-    assert store.add_if_unused("jti-1", company["id"]) is False
-    assert store.is_used("jti-1") and not store.is_used("jti-2")
+    assert company_repository.add_if_unused("jti-1", company["id"]) is True
+    assert company_repository.add_if_unused("jti-1", company["id"]) is False
+    assert company_repository.is_used("jti-1") and not company_repository.is_used("jti-2")
 
 
 # ---------------------------------------------------------------------------------- audit (5)
 def test_audit_entry_is_written_and_readable(make):
     company = make()
-    store.audit(company["id"], "5a1c0001-0000-4000-8000-000000000001", "patchCompany",
+    company_repository.audit(company["id"], "5a1c0001-0000-4000-8000-000000000001", "patchCompany",
                 details={"shortName": {"old": None, "new": "Kurz"}})
-    store.audit(None, None, "createCompany")
-    entries = store.list_audit(company["id"])
+    company_repository.audit(None, None, "createCompany")
+    entries = company_repository.list_audit(company["id"])
     assert len(entries) == 1
     assert entries[0]["operation"] == "patchCompany"
     assert entries[0]["details"]["shortName"]["new"] == "Kurz"
-    assert store.list_audit()[1]["sub"] == ""       # steps have no sub
-    assert store.list_audit("unknown") == []
+    assert company_repository.list_audit()[1]["sub"] == ""       # steps have no sub
+    assert company_repository.list_audit("unknown") == []
 
 
 # ----------------------------------------------------------------------------------- lock (6.9)
 def test_lock_yields_the_company_id():
-    with store.lock("company-1") as locked:
+    with company_repository.lock("company-1") as locked:
         assert locked == "company-1"
 
 
 # ---------------------------------------------------------------------------------- reset
 def test_reset_clears_every_table(make):
     company = make(bpn="BPNL00000000AAAA")
-    store.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789"}])
-    store.add_role(company["id"], "ACTIVE_PARTICIPANT")
-    store.set_consent(company["id"], "terms-active-participant", version="1.0")
-    request = store.create_change_request({"company_id": company["id"]})
-    store.add_document(request["id"], file_name="a.pdf", media_type="application/pdf",
+    company_repository.set_identifiers(company["id"], [{"type": "VAT_ID", "value": "DE123456789"}])
+    company_repository.add_role(company["id"], "ACTIVE_PARTICIPANT")
+    company_repository.set_consent(company["id"], "terms-active-participant", version="1.0")
+    request = company_repository.create_change_request({"company_id": company["id"]})
+    company_repository.add_document(request["id"], file_name="a.pdf", media_type="application/pdf",
                        content=b"%PDF-1")
-    store.add_if_unused("jti", company["id"])
-    store.audit(company["id"], "sub", "op")
+    company_repository.add_if_unused("jti", company["id"])
+    company_repository.audit(company["id"], "sub", "op")
 
-    store.reset()
+    company_repository.reset()
 
-    assert store.get_company(company["id"]) is None
-    assert store.list_identifiers(company["id"]) == []
-    assert store.list_roles(company["id"]) == {}
-    assert store.list_consents(company["id"]) == []
-    assert store.list_change_requests(company_id=company["id"]) == ([], 0)
-    assert store.list_documents(request["id"]) == []
-    assert not store.is_used("jti")
-    assert store.list_audit() == []
-    assert store.find_companies()[1] == 0
+    assert company_repository.get_company(company["id"]) is None
+    assert company_repository.list_identifiers(company["id"]) == []
+    assert company_repository.list_roles(company["id"]) == {}
+    assert company_repository.list_consents(company["id"]) == []
+    assert company_repository.list_change_requests(company_id=company["id"]) == ([], 0)
+    assert company_repository.list_documents(request["id"]) == []
+    assert not company_repository.is_used("jti")
+    assert company_repository.list_audit() == []
+    assert company_repository.find_companies()[1] == 0
 
 
 # ------------------------------------------------------------------------------ comparison (6.3)

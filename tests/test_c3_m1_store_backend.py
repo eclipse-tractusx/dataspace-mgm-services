@@ -22,7 +22,7 @@
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: Hermes Agent (deepseek-v4.1-flash)
 #################################################################################
-"""The transport switch of `modules/c3_m1/store.py`: `DATABASE_URL` empty = in memory, set = the
+"""The transport switch of `features/company_profile/managers/company_repository.py`: `DATABASE_URL` empty = in memory, set = the
 module's own PostgreSQL database (README 4, 5).
 
 The live tests need a server and are skipped without it:
@@ -34,7 +34,7 @@ import os
 
 import pytest
 
-from modules.c3_m1 import store
+from features.company_profile.managers import company_repository
 
 COMPANY = {
     "id": "c0000001-0000-4000-8000-000000000001", "name": "Beispiel Maschinenbau GmbH",
@@ -55,27 +55,27 @@ def postgres_url() -> str:
 def postgres(monkeypatch, postgres_url):
     monkeypatch.setenv("DATABASE_URL", postgres_url)
     pytest.importorskip("psycopg", reason="the PostgreSQL transport needs psycopg[binary]")
-    assert store.backend_name() == "postgres"
-    store.reset()
-    yield store
-    store.reset()
+    assert company_repository.backend_name() == "postgres"
+    company_repository.reset()
+    yield company_repository
+    company_repository.reset()
 
 
 def test_the_default_transport_is_in_memory(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    assert store.backend_name() == "memory"
-    assert store.backend().__name__ == "modules.c3_m1.store_memory"
+    assert company_repository.backend_name() == "memory"
+    assert company_repository.backend().__name__ == "features.company_profile.managers.memory_backend"
 
 
 def test_the_transport_follows_database_url_at_call_time(monkeypatch, postgres_url):
     """No value at import: the environment decides per call (AGENTS.md 6)."""
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    assert store.backend_name() == "memory"
+    assert company_repository.backend_name() == "memory"
     monkeypatch.setenv("DATABASE_URL", postgres_url)
-    assert store.backend_name() == "postgres"
-    assert store.backend().__name__ == "modules.c3_m1.store_postgres"
+    assert company_repository.backend_name() == "postgres"
+    assert company_repository.backend().__name__ == "features.company_profile.managers.postgres_backend"
     monkeypatch.delenv("DATABASE_URL")
-    assert store.backend_name() == "memory"
+    assert company_repository.backend_name() == "memory"
 
 
 def test_the_database_is_the_module_own_database(postgres):
@@ -116,22 +116,22 @@ def test_a_missing_driver_answers_not_implemented(monkeypatch, postgres_url):
     from portal_common.problems import Problem
 
     monkeypatch.setenv("DATABASE_URL", postgres_url)
-    monkeypatch.setattr(store, "_cache", None)
-    real_import = store.importlib.import_module
+    monkeypatch.setattr(company_repository, "_cache", None)
+    real_import = company_repository.importlib.import_module
 
     def fake_import(name, package=None):
-        if name == ".store_postgres":
+        if name == ".postgres_backend":
             raise ModuleNotFoundError("No module named 'psycopg'", name="psycopg")
         return real_import(name, package)
 
-    monkeypatch.setattr(store.importlib, "import_module", fake_import)
+    monkeypatch.setattr(company_repository.importlib, "import_module", fake_import)
     with pytest.raises(Problem) as error:
-        store.get_company("c0000001-0000-4000-8000-000000000001")
+        company_repository.get_company("c0000001-0000-4000-8000-000000000001")
     assert error.value.status == 501
     assert error.value.body()["type"] == "urn:c3-m1:problem:not-implemented"
 
 
 def test_a_path_id_that_is_no_uuid_is_not_found_in_memory(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    assert store.get_company("nope") is None
-    assert store.update_company("nope", name="x") is None
+    assert company_repository.get_company("nope") is None
+    assert company_repository.update_company("nope", name="x") is None

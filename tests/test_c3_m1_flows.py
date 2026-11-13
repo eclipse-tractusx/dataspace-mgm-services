@@ -33,8 +33,11 @@ import datetime as dt
 
 import pytest
 
+from features import company_profile
+from features.company_profile import interface
+from features.company_profile.managers import company_repository
+from features.company_profile.services import company_lifecycle_service
 from modules.c12_m1 import engine as eng
-from modules.c3_m1 import interface, store
 from portal_common import events
 
 U1, U2 = "c0000001-0000-4000-8000-000000000001", "c0000002-0000-4000-8000-000000000002"   # FRAMEWORK 7a
@@ -52,11 +55,11 @@ def engine(monkeypatch):
     monkeypatch.delenv("C1_M2_URL", raising=False)
     monkeypatch.delenv("REGISTRATION_URL", raising=False)
     monkeypatch.delenv("STUB_APPLICATIONS_FILE", raising=False)   # README 4 default: the module's file
-    interface.reset()
+    company_profile.reset()
     e = eng.reset()
     e.clock = lambda: dt.datetime(2026, 11, 6, 9, 0, tzinfo=dt.UTC)
     yield e
-    interface.reset()
+    company_profile.reset()
 
 
 def active(company: str, application: str, bpn: str) -> None:
@@ -82,10 +85,10 @@ def run(engine, flow: str, application: str, company: str, kind: str, applicant:
 def test_reactivation_completes_with_the_application_submitted(engine):
     """FRAMEWORK 5.5: deactivated by OSP staff, reactivated through the flow `reactivation`."""
     active(U1, A1, BPN_U1)
-    interface.deactivate_company_by_staff(U1, {"reason": "Pause"}, OTTO)
-    assert interface._stub_applications()[A5]["status"] == "SUBMITTED"
+    company_lifecycle_service.deactivate_company_by_staff(U1, {"reason": "Pause"}, OTTO)
+    assert company_lifecycle_service._stub_applications()[A5]["status"] == "SUBMITTED"
     run(engine, "reactivation", A5, U1, "REACTIVATION", ERIKA)
-    row = store.get_company(U1)
+    row = company_repository.get_company(U1)
     assert (row["status"], row["deactivation_reason"]) == ("ACTIVE", None)
 
 
@@ -93,8 +96,8 @@ def test_return_completes_with_the_application_submitted(engine):
     """FRAMEWORK 5.6: the company moved away (deactivated TRANSFERRED) and comes back (flow `return`)."""
     active(U2, A2, BPN_U2)
     engine.on_event(event("c3-m2", "CompanyTransferredAway", companyId=U2, bpn=BPN_U2))
-    assert store.get_company(U2)["deactivation_reason"] == "TRANSFERRED"
-    assert interface._stub_applications()[A7]["status"] == "SUBMITTED"
+    assert company_repository.get_company(U2)["deactivation_reason"] == "TRANSFERRED"
+    assert company_lifecycle_service._stub_applications()[A7]["status"] == "SUBMITTED"
     run(engine, "return", A7, U2, "TRANSFER", HANS, bpn=BPN_U2)
-    row = store.get_company(U2)
+    row = company_repository.get_company(U2)
     assert (row["status"], row["bpn"]) == ("ACTIVE", BPN_U2)

@@ -32,15 +32,15 @@ import time
 
 import jwt
 import pytest
-from fastapi.testclient import TestClient
-
 from conftest import BASE, bearer, person_token
-from modules.c3_m1 import config, store
+from fastapi.testclient import TestClient
+from test_c3_m1_steps import A1, U1, _c1_m2, seed, step  # noqa: F401  (_c1_m2: fixture)
+
+from features.company_profile import config
+from features.company_profile.managers import company_repository
 from portal_common import http as phttp
 from tools import test_iam
 from tools.keys import ec_jwk
-
-from test_c3_m1_steps import A1, U1, _c1_m2, seed, step  # noqa: F401  (_c1_m2: fixture)
 
 BPN_U1 = "BPNLIUK2REMLK3F4"
 
@@ -72,7 +72,7 @@ def osp_a(monkeypatch):
 
 
 def update(client: TestClient, attestation: str):
-    return client.post(f"/api/c3-m1/companies/{U1}/attestation-updates", json={"attestation": attestation},
+    return client.post(f"/api/company-profile/companies/{U1}/attestation-updates", json={"attestation": attestation},
                        headers=bearer(person_token("erika")))
 
 
@@ -85,7 +85,7 @@ def test_an_attestation_of_the_installations_ebw_connector_is_accepted(osp_a):
     real = osp_a.post("/ebw/test/attestations", json={"company": "maschinenbau", "clientId": "osp-a-ui"})
     r = update(osp_a, real.json()["attestation"])
     assert r.status_code == 200, r.json()
-    assert store.get_company(U1)["core_data_source"] == "EBW"
+    assert company_repository.get_company(U1)["core_data_source"] == "EBW"
 
 
 def test_an_attestation_signed_with_another_key_is_refused(osp_a):
@@ -102,4 +102,4 @@ def test_an_attestation_signed_with_another_key_is_refused(osp_a):
                         headers={"typ": "ebw-attestation+jwt", "kid": private["kid"]})
     r = update(osp_a, forged)
     assert r.status_code == 400 and r.json()["reason"] == "signature", r.json()
-    assert store.get_company(U1)["name"] == "Beispiel Maschinenbau GmbH"
+    assert company_repository.get_company(U1)["name"] == "Beispiel Maschinenbau GmbH"

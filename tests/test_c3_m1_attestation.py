@@ -33,14 +33,15 @@ import json
 
 import jwt
 import pytest
+from test_c3_m1_api import P3, active, call, client  # noqa: F401  (fixtures for the HTTP test)
+from test_c3_m1_steps import A1, A2, P1, U1, U2, _c1_m2, seed, step  # noqa: F401  (_c1_m2: fixture)
 
-from modules.c3_m1 import interface, store
+from features import company_profile
+from features.company_profile.managers import company_repository
+from features.company_profile.services import company_service
 from portal_common import events
 from portal_common.problems import Problem
 from tools.keys import ec_jwk
-
-from test_c3_m1_api import P3, active, call, client  # noqa: F401  (fixtures for the HTTP test)
-from test_c3_m1_steps import A1, U1, P1, U2, A2, _c1_m2, seed, step  # noqa: F401  (_c1_m2: fixture)
 
 PRIVATE, PUBLIC = ec_jwk("ebw-test-2026-1")   # generated at start; no private key is stored
 
@@ -53,7 +54,7 @@ def _keys(monkeypatch, tmp_path):
     monkeypatch.setenv("ATTESTATION_AUDIENCE", "portal-registration")
     monkeypatch.setenv("ATTESTATION_CLIENT_IDS", "demo-osp")
     monkeypatch.setenv("ATTESTATION_JWKS_FILE", str(jwks))
-    interface.reset()
+    company_profile.reset()
     yield
 
 
@@ -90,7 +91,7 @@ def active_company(application: str = A1, company: str = U1) -> None:
 
 
 def update(company_id: str = U1, **over) -> dict:
-    return interface.update_company_from_attestation(company_id, {"attestation": sign(claims(**over))}, P1)
+    return company_service.update_company_from_attestation(company_id, {"attestation": sign(claims(**over))}, P1)
 
 
 # ---------------------------------------------------------------------------------------- 13.11
@@ -98,12 +99,12 @@ def test_a_valid_attestation_changes_the_core_data():
     active_company()
     answer = update()
     assert set(answer["changedFields"]) == {"name", "street", "houseNumber", "postalCode", "region"}
-    row = store.get_company(U1)
+    row = company_repository.get_company(U1)
     assert row["name"] == "Beispiel Maschinenbau AG"
     assert (row["street"], row["house_number"], row["region"]) == ("Industriestraße 10", None, None)
     assert row["country_code"] == "DE"
     assert row["core_data_source"] == "EBW" and row["verification_ref"] == "jti-t1"
-    identifiers = {entry["type"]: entry["source"] for entry in store.list_identifiers(U1)}
+    identifiers = {entry["type"]: entry["source"] for entry in company_repository.list_identifiers(U1)}
     assert identifiers["EBWOID"] == "BUSINESS_WALLET"
     event = events.RELAY.log[-1]
     assert event["type"] == "CompanyDataChanged" and event["data"]["coreDataChanged"] is True
@@ -144,7 +145,7 @@ def test_a_foreign_key_is_a_signature_error():
     from cryptography.hazmat.primitives.asymmetric import ec
     foreign = ec.generate_private_key(ec.SECP256R1())
     with pytest.raises(Problem) as error:
-        interface.update_company_from_attestation(
+        company_service.update_company_from_attestation(
             U1, {"attestation": jwt.encode(claims(), foreign, algorithm="ES256",
                                            headers={"typ": "ebw-attestation+jwt",
                                                     "kid": PRIVATE["kid"]})})
@@ -186,14 +187,14 @@ def test_the_reasons_of_a_refused_attestation(over, reason):
 def test_the_wrong_typ_is_an_algorithm_error():
     active_company()
     with pytest.raises(Problem) as error:
-        interface.update_company_from_attestation(U1, {"attestation": sign(claims(), typ="JWT")})
+        company_service.update_company_from_attestation(U1, {"attestation": sign(claims(), typ="JWT")})
     assert error.value.ext["reason"] == "algorithm"
 
 
 def test_a_broken_compact_serialisation_is_a_format_error():
     active_company()
     with pytest.raises(Problem) as error:
-        interface.update_company_from_attestation(U1, {"attestation": "nur-ein-teil"})
+        company_service.update_company_from_attestation(U1, {"attestation": "nur-ein-teil"})
     assert error.value.ext["reason"] == "format"
 
 
@@ -216,7 +217,7 @@ def test_only_active_companies_take_an_attestation():
 
 # ------------------------------------------------------------------------------------ 13.11 over HTTP
 def test_the_endpoint_checks_permission_and_scope(client, active):
-    url = f"/api/c3-m1/companies/{U1}/attestation-updates"
+    url = f"/api/company-profile/companies/{U1}/attestation-updates"
     body = {"attestation": sign(claims())}
     assert call(client, "POST", url, "max", json=body).status_code == 403     # Member
     assert call(client, "POST", url, P3, json=body).status_code == 404        # other company

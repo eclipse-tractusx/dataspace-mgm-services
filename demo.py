@@ -168,10 +168,10 @@ def onboarding(t: Target, base: str, applicant: str, reviewer: str, admin: str, 
                 "companyRoles": ["ACTIVE_PARTICIPANT"],
                 "companyData": {"identifiers": [{"type": "VAT_ID", "value": "DE123456789" if company == "maschinenbau"
                                                  else "DE300000003"}]}}
-    r = t.call("POST", f"{base}/api/c1-m2/applications", tok, json=application("demo-osp"))
+    r = t.call("POST", f"{base}/api/registration/applications", tok, json=application("demo-osp"))
     t.check(f"C1-M2 refuses an attestation for another client (ATTESTATION_CLIENT_IDS = {ui_client})",
             r.status_code == 400 and r.json().get("reason") == "client", f"{r.status_code} {r.text[:200]}")
-    r = t.call("POST", f"{base}/api/c1-m2/applications", tok, json=application(ui_client))
+    r = t.call("POST", f"{base}/api/registration/applications", tok, json=application(ui_client))
     if not t.check(f"C1-M2 creates the application (attestation for {ui_client} from the EBW-Connector double)",
                    r.status_code == 201,
                    f"{r.status_code} {r.text[:200]}"):
@@ -181,7 +181,7 @@ def onboarding(t: Target, base: str, applicant: str, reviewer: str, admin: str, 
     # required terms of C1-M2 6.8: osp-terms for every application, two for ACTIVE_PARTICIPANT
     consents = [{"agreementKey": k, "version": "1.0", "language": "en"}
                 for k in ("osp-terms", "terms-active-participant", "security-regulations")]
-    r = t.call("POST", f"{base}/api/c1-m2/applications/{aid}/submit", tok, json={"consents": consents})
+    r = t.call("POST", f"{base}/api/registration/applications/{aid}/submit", tok, json={"consents": consents})
     t.check("C1-M2 submit with consents -> ApplicationSubmitted", r.status_code == 200 and r.json()["status"] == "SUBMITTED",
             r.text[:200])
     p = t.process(base, admin, "onboarding", aid, ("WAITING", "FAILED"))
@@ -203,7 +203,7 @@ def onboarding(t: Target, base: str, applicant: str, reviewer: str, admin: str, 
     if not t.check("C12 onboarding runs to COMPLETED", p and p["status"] == "COMPLETED", t.trace(p)):
         return False
     cid = app["companyId"]
-    c = t.call("GET", f"{base}/api/c3-m1/osp/companies/{cid}", t.token(base, admin)).json()
+    c = t.call("GET", f"{base}/api/company-profile/osp/companies/{cid}", t.token(base, admin)).json()
     t.ctx[f"{company}.bpn"] = c.get("bpn")
     roles = {r.get("companyRole"): r.get("status") for r in c.get("companyRoles", [])}
     t.check("C3-M1: company ACTIVE with BPN and company role ACTIVE_PARTICIPANT",
@@ -350,7 +350,7 @@ def scenario_4(t: Target) -> None:
         t.check("CSP wallet: dataspace wallet of the company exists at the CSP", bool(w), json.dumps(wallets)[:300])
         t.check("route STUB: no credential in the CSP wallet and no callback of the CSP issuer (OP-53)",
                 not w.get("credentials") and not cbs, json.dumps({"wallet": w, "callbacks": cbs})[:300])
-    a = t.call("GET", f"{t.osp_b}/api/c3-m1/osp/companies/{t.ctx['maschinenbau.companyId']}", t.token(t.osp_b, "rita")) \
+    a = t.call("GET", f"{t.osp_b}/api/company-profile/osp/companies/{t.ctx['maschinenbau.companyId']}", t.token(t.osp_b, "rita")) \
         if t.ctx.get("maschinenbau.companyId") else None
     t.check("installations are separate: OSP B does not know the company of OSP A", a is None or a.status_code == 404)
     r = t.call("GET", f"{t.osp_b}/api/c12-m1/processes", t.token(t.osp_a, "otto"))

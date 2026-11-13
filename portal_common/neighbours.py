@@ -26,10 +26,11 @@
 
 Address of a neighbour (FRAMEWORK 4.7), one notation for all modules:
 1. `<MODULE>_URL`, e.g. `C3_M1_URL`;
-2. otherwise the entry in `MODULE_URLS` (JSON, e.g. `{"c3-m1": "in-process"}`, C12-M1 section 4);
+2. otherwise the entry in `MODULE_URLS` (JSON, e.g. `{"c3-m1": "in-process"}`, C12-M1 section 4; the key
+   may also be the readable feature name, `{"company_profile": "in-process"}`, ADR-0003);
 3. otherwise `MODULE_URLS_DEFAULT` (the scaffold sets `in-process`).
 Values: empty = built-in stand-in of the caller, `in-process` = direct call of the interface
-function `modules.<module>.interface.<function>` (no token, FRAMEWORK 4.2), otherwise the HTTP
+function `<interface package>.<function>` (`portal_common.layout`) (no token, FRAMEWORK 4.2), otherwise the HTTP
 address of the split-out module (with the caller's service token).
 
     company = neighbours.query("c4-m2", "c3-m1", "query_company", companyId=cid)
@@ -54,7 +55,10 @@ log = logging.getLogger("portal.neighbours")
 def _configured(target: str) -> str:
     env = os.environ.get(target.upper().replace("-", "_") + "_URL")
     if env is None:
-        env = json.loads(os.environ.get("MODULE_URLS") or "{}").get(target)
+        urls = json.loads(os.environ.get("MODULE_URLS") or "{}")
+        env = urls.get(target)
+        if env is None and target in spec.modules():
+            env = urls.get(spec.module(target).name)   # readable key, e.g. {"registration": "http://onboarding:8000"}
     if env is None:
         env = os.environ.get("MODULE_URLS_DEFAULT", "")
     return env.strip()

@@ -58,9 +58,9 @@ import re
 from typing import Any
 
 import pytest
+from conftest import BASE
 from fastapi.testclient import TestClient
 
-from conftest import BASE
 from portal_common import csp as csp_client
 from portal_common import events, spec
 from portal_common import http as phttp
@@ -111,7 +111,7 @@ def company(key: str, **changes) -> dict:
 
 
 class CompanyBook:
-    """Fake C3-M1: `modules.c3_m1.interface.query_company(companyId=...)` answers from here."""
+    """Fake C3-M1: `features.company_profile.interface.query_company(companyId=...)` answers from here."""
 
     def __init__(self) -> None:
         self.data: dict[str, dict] = {c["id"]: copy.deepcopy(c) for c in COMPANIES.values()}
@@ -142,7 +142,7 @@ def companies(monkeypatch) -> CompanyBook:
     """Fake C3-M1. `neighbours.query` calls the interface function in-process at call time; a 404 Problem
     becomes `None` for the caller (portal_common/neighbours.py)."""
     book = CompanyBook()
-    monkeypatch.setattr("modules.c3_m1.interface.query_company", book.query_company)
+    monkeypatch.setattr("features.company_profile.interface.query_company", book.query_company)
     return book
 
 

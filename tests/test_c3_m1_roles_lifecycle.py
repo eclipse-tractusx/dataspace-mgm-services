@@ -24,14 +24,19 @@
 #################################################################################
 """Company roles with consents, deactivation, return and transfer (README 7.7-7.9, 7.13, 8.5, 8.6, 13.19-13.22, 13.26, 13.27)."""
 import pytest
-
-from modules.c3_m1 import interface, store
-from portal_common import events
-from portal_common.problems import Problem
-
 from test_c3_m1_api import S2, U1, U2, active, call, client  # noqa: F401
 from test_c3_m1_attestation import _keys  # noqa: F401  (fixture: attestation environment)
 from test_c3_m1_steps import A1, A3, ADDRESS, CONSENTS, P1, U3, _c1_m2, seed, step  # noqa: F401  (_c1_m2: fixture)
+
+from features.company_profile.managers import company_repository
+from features.company_profile.services import (
+    change_request_service,
+    company_lifecycle_service,
+    company_role_service,
+    company_service,
+)
+from portal_common import events
+from portal_common.problems import Problem
 
 A5 = "a0000005-0000-4000-8000-000000000005"
 A6 = "a0000006-0000-4000-8000-000000000006"
@@ -46,72 +51,72 @@ CONSENT_APP = [{"agreementKey": "terms-app-provider", "version": "1.0"}]
 
 # ------------------------------------------------------------------------------------------ 13.27
 def test_a_role_is_added_with_its_consents(active):
-    roles = interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP},
+    roles = company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP},
                                        P1_SUB)
     states = {role["companyRole"]: role for role in roles}
     assert states["APP_PROVIDER"]["status"] == "ACTIVE"
-    consent = store.get_consent(U1, "terms-app-provider")
+    consent = company_repository.get_consent(U1, "terms-app-provider")
     assert consent["status"] == "ACTIVE" and consent["consented_by"] == P1_SUB
     assert events.RELAY.log[-1]["type"] == "CompanyRolesChanged"
     # a second call changes nothing
     events.RELAY.log.clear()
-    interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP}, P1_SUB)
+    company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP}, P1_SUB)
     assert events.RELAY.log == []
 
 
 def test_the_consent_checks(active):
     with pytest.raises(Problem) as error:
-        interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": []}, P1_SUB)
+        company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": []}, P1_SUB)
     assert error.value.status == 400 and error.value.name == "consent-missing"
     assert error.value.ext["missing"] == ["terms-app-provider"]
 
     with pytest.raises(Problem) as error:
-        interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": [
+        company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": [
             {"agreementKey": "terms-app-provider", "version": "0.9"}]}, P1_SUB)
     assert error.value.name == "consent-missing"
 
     with pytest.raises(Problem) as error:
-        interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP + [
+        company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP + [
             {"agreementKey": "security-regulations", "version": "1.0"}]}, P1_SUB)
     assert error.value.status == 400 and error.value.name == "validation"
 
     with pytest.raises(Problem) as error:
-        interface.add_company_role(U1, {"companyRole": "NOPE", "consents": []}, P1_SUB)
+        company_role_service.add_company_role(U1, {"companyRole": "NOPE", "consents": []}, P1_SUB)
     assert error.value.name == "validation"
 
 
 def test_the_seed_role_is_not_assignable(active):
     with pytest.raises(Problem) as error:
-        interface.add_company_role(U1, {"companyRole": "ONBOARDING_SERVICE_PROVIDER",
+        company_role_service.add_company_role(U1, {"companyRole": "ONBOARDING_SERVICE_PROVIDER",
                                         "consents": []}, P1_SUB)
     assert error.value.status == 409 and error.value.name == "role-not-assignable"
 
 
 def test_the_last_role_cannot_be_removed(active):
-    interface.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP}, P1_SUB)
-    interface.remove_company_role(U1, "APP_PROVIDER", P1_SUB)
-    assert store.get_consent(U1, "terms-app-provider")["status"] == "INACTIVE"
+    company_role_service.add_company_role(U1, {"companyRole": "APP_PROVIDER", "consents": CONSENT_APP}, P1_SUB)
+    company_role_service.remove_company_role(U1, "APP_PROVIDER", P1_SUB)
+    assert company_repository.get_consent(U1, "terms-app-provider")["status"] == "INACTIVE"
     with pytest.raises(Problem) as error:
-        interface.remove_company_role(U1, "ACTIVE_PARTICIPANT", P1_SUB)
+        company_role_service.remove_company_role(U1, "ACTIVE_PARTICIPANT", P1_SUB)
     assert error.value.status == 409 and error.value.name == "last-role"
 
 
 # ------------------------------------------------------------------------------------------ 13.19
 def test_the_osp_deactivation_and_the_lock_while_inactive(active):
-    answer = interface.deactivate_company_by_staff(U1, {"reason": "Vertrag beendet"}, S2_SUB)
+    answer = company_lifecycle_service.deactivate_company_by_staff(U1, {"reason": "Vertrag beendet"}, S2_SUB)
     assert answer["status"] == "INACTIVE" and answer["deactivationReason"] == "MANUAL"
     event = events.RELAY.log[-1]
     assert event["type"] == "CompanyDeactivated" and event["data"]["reason"] == "MANUAL"
     assert "Vertrag beendet" not in str(event["data"])
-    assert interface.deactivate_company_by_staff(U1, {"reason": "nochmal"}, S2_SUB)["status"] == "INACTIVE"
+    assert company_lifecycle_service.deactivate_company_by_staff(U1, {"reason": "nochmal"}, S2_SUB)["status"] == "INACTIVE"
     with pytest.raises(Problem) as error:
-        interface.update_company(U1, {"shortName": "x"}, P1_SUB)
+        company_service.update_company(U1, {"shortName": "x"}, P1_SUB)
     assert error.value.status == 409 and error.value.name == "invalid-state"
 
 
 # ------------------------------------------------------------------------------------------ 13.20
 def test_the_reactivation_with_a_new_attestation(active):
-    interface.deactivate_company_by_staff(U1, {"reason": "Pause"}, S2_SUB)
+    company_lifecycle_service.deactivate_company_by_staff(U1, {"reason": "Pause"}, S2_SUB)
     seed(A5, U1, status="SUBMITTED", kind="REACTIVATION", companyData={
         "legalName": "Beispiel Maschinenbau GmbH", "address": dict(ADDRESS, streetName="Musterstraße",
                                                                    streetNumber="7"),
@@ -120,7 +125,7 @@ def test_the_reactivation_with_a_new_attestation(active):
     events.RELAY.log.clear()
     answer = step("reactivate_company", companyId=U1, applicationId=A5)
     assert answer["result"]["status"] == "ACTIVE"
-    row = store.get_company(U1)
+    row = company_repository.get_company(U1)
     assert row["street"] == "Musterstraße" and row["house_number"] == "7"
     assert row["core_data_source"] == "EBW" and row["deactivation_reason"] is None
     types = [event["type"] for event in events.RELAY.log]
@@ -164,32 +169,33 @@ def test_a_company_transfers_to_this_installation():
     step("assign_identifier", companyId=U4, bpn="BPNL00000000002B")
     answer = step("activate_company", companyId=U4, applicationId=A8)
     assert answer["result"]["status"] == "ACTIVE"
-    assert store.get_company(U4)["bpn"] == "BPNL00000000002B"
+    assert company_repository.get_company(U4)["bpn"] == "BPNL00000000002B"
 
 
 # ------------------------------------------------------------------------------------------ 13.26, 13.27 over HTTP
 def test_the_roles_are_visible_with_terms(client, active):
-    response = call(client, "GET", f"/api/c3-m1/companies/{U1}/company-roles?lang=de", P1)
+    response = call(client, "GET", f"/api/company-profile/companies/{U1}/company-roles?lang=de", P1)
     assert response.status_code == 200
     states = {role["companyRole"]: role for role in response.json()}
     assert states["ACTIVE_PARTICIPANT"]["status"] == "ACTIVE"
-    assert [term["agreementKey"] for term in states["ACTIVE_PARTICIPANT"]["agreements"]] == \
+    assert [term["agreementKey"] for term in states["ACTIVE_PARTICIPANT"]["agreements"]] ==\
         ["terms-active-participant", "security-regulations"]
     assert "APP_PROVIDER" in states
 
 
 def test_no_token_attestation_document_or_person_name_leaks(active, _keys):
     """13.26: no JWT, no document content, no token, no names of people in events or audit."""
-    from test_c3_m1_attestation import claims as attestation_claims, sign
+    from test_c3_m1_attestation import claims as attestation_claims
+    from test_c3_m1_attestation import sign
 
-    interface.create_change_request(U1, {"comment": "privat", "identifiers": [
+    change_request_service.create_change_request(U1, {"comment": "privat", "identifiers": [
         {"type": "VAT_ID", "value": "DE555444333"}]},
         [("auszug.pdf", b"%PDF-1.7 Vertraulich", "application/pdf")], P1_SUB)
-    interface.update_company_from_attestation(U1, {"attestation": sign(attestation_claims())}, P1_SUB)
-    interface.deactivate_company_by_staff(U1, {"reason": "Grund"}, S2_SUB)
+    company_service.update_company_from_attestation(U1, {"attestation": sign(attestation_claims())}, P1_SUB)
+    company_lifecycle_service.deactivate_company_by_staff(U1, {"reason": "Grund"}, S2_SUB)
 
-    dumps = [str(event["data"]) for event in events.RELAY.log] + \
-            [str(entry["details"]) for entry in store.list_audit(U1)]
+    dumps = [str(event["data"]) for event in events.RELAY.log] +\
+            [str(entry["details"]) for entry in company_repository.list_audit(U1)]
     assert len(dumps) > 5
     for text in dumps:
         assert "eyJ" not in text          # no attestation, no token
