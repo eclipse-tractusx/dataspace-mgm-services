@@ -172,8 +172,8 @@ spec:
         paths:
           {{- range $rt := .Values.runtimes.items }}
           {{- $svc := include "dataspace-mgm.runtime.fullname" (dict "ctx" $ "runtime" $rt) }}
-          {{- range $m := $rt.modules }}
-          - path: /api/{{ $m }}
+          {{- range $f := $rt.features }}
+          - path: /api/{{ $f | replace "_" "-" }}
             pathType: Prefix
             backend:
               service:

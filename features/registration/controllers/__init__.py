@@ -21,7 +21,7 @@
 #
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
-"""HTTP API of the registration under `/api/c1-m2` (spec C1-M2), one folder per path segment.
+"""HTTP API of the registration under `/api/registration` (spec C1-M2), one folder per path segment.
 
 See `portal_common.routing`: every sub-folder serves one path segment (`company_roles/` -> `/company-roles`), its
 `controller.py` the operations of that path.

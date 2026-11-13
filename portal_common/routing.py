@@ -23,7 +23,7 @@
 #  Assisted-By: GitHub Copilot (claude-opus-5.5)
 """Controllers of a feature, organised like the URL they serve (ADR-0003).
 
-The folder `features/<feature>/controllers/` is the base path of the spec (`/api/c1-m2`); every
+The folder `features/<feature>/controllers/` is the base path of the feature (`/api/registration`); every
 sub-folder is one path segment (`company_roles/` serves `/company-roles`). A folder's
 `controller.py` holds the operations of that path, each with a path relative to its folder:
 

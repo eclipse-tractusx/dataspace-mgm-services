@@ -48,7 +48,8 @@ flowchart LR
 - The UI calls the service over HTTPS; the browser holds only a session cookie, no tokens (see the
   [frontend architecture](https://github.com/eclipse-tractusx/dataspace-mgm-ui/blob/main/docs/architecture/README.md)).
 - Live updates for the UI are Server-Sent Events (`.../events`), never WebSockets and never polling.
-- Each module is reachable at `/api/<module>`, e.g. `/api/c1-m2` (FRAMEWORK 4.1).
+- Each module is reachable at `/api/<module>`, e.g. `/api/c12-m1` (FRAMEWORK 4.1); a migrated feature at its readable
+  name, e.g. `/api/registration` (ADR-0003).
 - Calls to the CSP use `private_key_jwt` with the signing key of the OSP.
 
 ## NOTICE

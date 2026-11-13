@@ -208,7 +208,7 @@ def test_neighbour_query_over_http_sends_service_token_and_maps_errors(monkeypat
     app = _iam_app()
     seen = {}
 
-    @app.get("/api/c1-m2/internal/applications/{aid}")
+    @app.get("/api/registration/internal/applications/{aid}")
     def get_app(aid: str, claims: dict = Depends(tokens.require("c1-m2", "query_c1_m2"))):
         seen["azp"] = claims["azp"]
         if aid == "teapot":

@@ -72,7 +72,7 @@ def osp_a(monkeypatch):
 
 
 def update(client: TestClient, attestation: str):
-    return client.post(f"/api/c3-m1/companies/{U1}/attestation-updates", json={"attestation": attestation},
+    return client.post(f"/api/company-profile/companies/{U1}/attestation-updates", json={"attestation": attestation},
                        headers=bearer(person_token("erika")))
 
 

@@ -81,7 +81,8 @@ variable names, own test data and silent errors. The rules below prevent this.
 7. C12 finds steps and queries by these names. Stand-in modules expose the same functions, so a
    team replaces the stand-in folder and nothing else changes.
 
-The folder name uses `c3_m1`; the spec, the URL path, `Problem` and `service_token` use `c3-m1`.
+The folder name uses `c3_m1`; the spec, the URL path, `Problem` and `service_token` use `c3-m1` (a migrated feature's
+URL path uses its readable name, see below).
 
 ## The module folder
 
@@ -96,7 +97,7 @@ Core Hub backend: one folder per API category and version, one file per controll
 `/api/v1` by `controllers/fastapi/__init__.py`. The first one is the event inbox
 `POST /api/v1/events/inbox` (FRAMEWORK 6, OP-54): split-out modules deliver their CloudEvents there.
 Module APIs never go there; they stay in `modules/<id>/router.py` (or `features/<name>/router.py`) under
-`/api/<module>`.
+`/api/<module>` (a migrated feature under `/api/<feature>`, for example `/api/company-profile`).
 
 ## Migrated features (ADR-0003)
 
@@ -106,7 +107,9 @@ rule 1. Every feature has the same shape: `__init__.py` (index: `NAME`, `MODULE`
 `on_startup()` / `on_event(event)`), `router.py`, `main.py`, `interface.py` (the call convention, unchanged),
 `controllers/` (HTTP only; one folder per path segment of the API, each with a `controller.py` whose paths are
 relative to the folder, see `portal_common.routing`), `services/` (business logic, no HTTP), `managers/` (state, adapters) and `models/`.
-Other modules import only `features.<name>.interface`. Runtimes in `runtimes/` import features
+Its API is served under its readable name (`/api/registration`, `/api/company-profile`), never under the spec id;
+Problem types, events, permissions and service accounts keep the spec id. Other modules import only
+`features.<name>.interface`. Runtimes in `runtimes/` import features
 (`create_runtime(registration, company_profile)`); `RUNTIME=<name> python -m runtimes` starts one.
 
 ## Definition of done

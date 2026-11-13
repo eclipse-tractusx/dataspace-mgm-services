@@ -187,7 +187,9 @@ backend:
 
 # One runtime (Deployment + Service) per feature or group of features, from the image of the backend (ADR-0002, ADR-0003).
 # Set `backend.enabled=false` when you use it. The settings of `backend.*` (IAM, CSP, secrets, env, probes,
-# security context) apply to every runtime. The ingress of the backend routes `/api/<module>` to the runtime.
+# security context) apply to every runtime. The ingress of the backend routes
+# `/api/<feature>` (`_` as `-`) to the runtime: a migrated feature by its readable name (`/api/company-profile`), a
+# module not migrated yet by its spec id (`/api/c12-m1`, ADR-0003).
 runtimes:
   # -- Whether the runtimes below are installed
   enabled: false
@@ -196,7 +198,7 @@ runtimes:
   service:
     # -- Service port of every runtime
     port: 8000
-  # -- Runtimes: `name`, `features` (readable names or spec ids served by the pod), optional `runtime`
+  # -- Runtimes: `name`, `features` (migrated features by readable name, other modules by spec id), optional `runtime`
   # (`RUNTIME`: a runtime in `runtimes/` or a feature; default `installation`, which serves `features`),
   # `replicaCount`, `resources` and `env`. Modules that run nowhere answer with their built-in stand-in
   items: []
@@ -204,7 +206,7 @@ runtimes:
   #   runtime: onboarding
   #   features: [registration, company_profile]
   # - name: process-orchestration            # not migrated yet: the installation runtime, narrowed
-  #   features: [process_orchestration]
+  #   features: [c12-m1]
 
 frontend:
   # -- Whether the Dataspace Management UI is installed

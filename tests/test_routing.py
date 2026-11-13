@@ -116,8 +116,8 @@ def test_mount_builds_the_path_from_the_folders_and_the_item_of_the_parent(tree)
         "applications/documents/controller.py": CONTROLLER.format(method="get", path="/{documentId}"),
     })
     paths = [route.path for route in routing.mount(package, "c1-m2").routes]
-    assert paths == ["/api/c1-m2/applications/{applicationId}/submit",
-                     "/api/c1-m2/applications/{applicationId}/documents/{documentId}"]
+    assert paths == ["/api/registration/applications/{applicationId}/submit",
+                     "/api/registration/applications/{applicationId}/documents/{documentId}"]
 
 
 def test_mount_rejects_an_operation_that_is_not_in_the_spec(tree):

@@ -58,8 +58,8 @@ def test_unimplemented_operation_answers_501_with_permission_check():
     problems.install(app)
     app.include_router(standin.fallback_router("c3-m1"))
     c = TestClient(app, base_url=BASE)
-    r = c.get("/api/c3-m1/osp/change-requests", headers=bearer(person_token("rolf")))
+    r = c.get("/api/company-profile/osp/change-requests", headers=bearer(person_token("rolf")))
     assert r.status_code == 501 and r.headers["content-type"].startswith("application/problem+json")
-    r = c.get("/api/c3-m1/osp/change-requests", headers=bearer(person_token("lieschen")))
+    r = c.get("/api/company-profile/osp/change-requests", headers=bearer(person_token("lieschen")))
     assert r.status_code == 403
     assert installation.get("/scaffold/modules").json()[-1] == {"module": "c12-m1", "kind": "provided"}

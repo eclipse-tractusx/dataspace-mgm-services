@@ -96,7 +96,19 @@ def test_single_feature_runtime_serves_its_paths_only():
     client = TestClient(create_runtime(registration), base_url=BASE)
     assert client.get("/scaffold/modules").json() == [{"module": "c1-m2", "kind": "feature"}]
     paths = client.get("/openapi.json").json()["paths"]
-    assert any(p.startswith("/api/c1-m2/") for p in paths) and not any(p.startswith("/api/c3-m1/") for p in paths)
+    assert any(p.startswith("/api/registration/") for p in paths)
+    assert not any(p.startswith("/api/company-profile/") for p in paths)
+
+
+def test_a_feature_is_served_under_its_readable_name_and_no_longer_under_its_spec_id():
+    assert layout.base_path("c1-m2") == "/api/registration"
+    assert layout.base_path("c3-m1") == "/api/company-profile"
+    assert layout.base_path("c12-m1") == "/api/c12-m1"   # not migrated yet: the path of the spec
+    paths = TestClient(create_runtime(registration, company_profile, "process_orchestration"),
+                       base_url=BASE).get("/openapi.json").json()["paths"]
+    prefixes = {"/".join(path.split("/")[:3]) for path in paths if path.startswith("/api/")}
+    assert {"/api/registration", "/api/company-profile", "/api/c12-m1"} <= prefixes
+    assert not prefixes & {"/api/c1-m2", "/api/c3-m1"}
 
 
 def test_runtime_mixes_features_and_modules_not_migrated_yet():

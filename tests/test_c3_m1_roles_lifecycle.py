@@ -174,7 +174,7 @@ def test_a_company_transfers_to_this_installation():
 
 # ------------------------------------------------------------------------------------------ 13.26, 13.27 over HTTP
 def test_the_roles_are_visible_with_terms(client, active):
-    response = call(client, "GET", f"/api/c3-m1/companies/{U1}/company-roles?lang=de", P1)
+    response = call(client, "GET", f"/api/company-profile/companies/{U1}/company-roles?lang=de", P1)
     assert response.status_code == 200
     states = {role["companyRole"]: role for role in response.json()}
     assert states["ACTIVE_PARTICIPANT"]["status"] == "ACTIVE"

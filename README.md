@@ -105,7 +105,8 @@ step, the [admin guide](docs/admin/README.md) the configuration of an operated i
 
 ## Usage
 
-Once the installation runs, the interface of every module is available under `/api/<module>`, documented with Swagger UI
+Once the installation runs, the interface of every module is available under `/api/<module>` (a migrated feature under its readable name,
+for example `/api/registration`), documented with Swagger UI
 at `/docs`:
 
 ```shell

@@ -69,12 +69,12 @@ def main() -> int:
         check("company-profile pod serves only the company profile",
               pod("company-profile", "/scaffold/modules") == [{"module": "c3-m1", "kind": "feature"}]),
     ]
-    r = httpx.post(f"{GATEWAY}/api/c3-m1/steps/create-company", headers=headers, json={
+    r = httpx.post(f"{GATEWAY}/api/company-profile/steps/create-company", headers=headers, json={
         "processId": "poc", "stepRunId": "poc-1", "companyId": "c0000001-0000-4000-8000-000000000001",
         "applicationId": UNKNOWN_APPLICATION})
     results.append(check("company profile asks the registration over HTTP (its 404 mapped, no 502)",
                          r.status_code == 404 and r.json()["type"] == "urn:c3-m1:problem:not-found", r.text))
-    r = httpx.post(f"{GATEWAY}/api/c3-m1/steps/deactivate-company", headers=headers, json={
+    r = httpx.post(f"{GATEWAY}/api/company-profile/steps/deactivate-company", headers=headers, json={
         "processId": "poc", "stepRunId": "poc-2", "companyId": OSP_COMPANY, "reason": "MANUAL"})
     results.append(check("company profile step answers DONE through the gateway", r.status_code == 200, r.text))
     arrived = []

@@ -142,13 +142,13 @@ def test_a_changed_euid_counts_as_core_data():
 
 # ------------------------------------------------------------------- the correction path (7.12)
 def test_the_correction_reports_wallet_conflicts_as_validation(client, active):
-    answer = call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    answer = call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
                   json={"identifiers": [{"type": "EUID", "value": "X"}], "reason": "r"})
     assert answer.status_code == 400 and answer.json()["type"].endswith("validation")
 
 
 def test_the_correction_keeps_old_values_in_the_audit(client, active):
-    call(client, "PATCH", f"/api/c3-m1/osp/companies/{U1}", S2,
+    call(client, "PATCH", f"/api/company-profile/osp/companies/{U1}", S2,
          json={"address": {"street": "Neue Straße"}, "reason": "Hinweis"})
     entry = [row for row in company_repository.list_audit(U1) if row["operation"] == "correctCompany"][-1]
     assert entry["details"]["old"]["street"] == "Musterstraße"
@@ -164,15 +164,15 @@ def test_the_attestation_update_keeps_old_values_in_the_audit(active):
 
 # --------------------------------------------------------------- schema shapes (second review)
 def test_a_company_answer_uses_id_and_created_at(client, active):
-    answer = call(client, "GET", f"/api/c3-m1/companies/{U1}", P1)
+    answer = call(client, "GET", f"/api/company-profile/companies/{U1}", P1)
     body = answer.json()
     assert body["id"] == U1 and body["createdAt"] and "companyId" not in body
-    detail = call(client, "GET", f"/api/c3-m1/osp/companies/{U1}", S1).json()
+    detail = call(client, "GET", f"/api/company-profile/osp/companies/{U1}", S1).json()
     assert detail["id"] == U1 and detail["createdAt"]
 
 
 def test_the_role_terms_carry_name_names_and_document_url(client, active):
-    answer = call(client, "GET", f"/api/c3-m1/companies/{U1}/company-roles?lang=en", P1)
+    answer = call(client, "GET", f"/api/company-profile/companies/{U1}/company-roles?lang=en", P1)
     term = answer.json()[0]["agreements"][0]
     assert set(term) >= {"name", "names", "documentUrl", "agreementKey", "version"}
 
@@ -274,7 +274,7 @@ def test_the_activation_calls_neither_the_csp_nor_c3_m2(active, monkeypatch):
 def test_the_document_goes_out_over_http_with_its_content_type(client, active):
     request = change_request_service.create_change_request(U1, {"comment": "x", "identifiers": [
         {"type": "VAT_ID", "value": "DE555444333"}]}, [PDF], P1_SUB)
-    answer = call(client, "GET", f"/api/c3-m1/osp/change-requests/{request['id']}/documents/"
+    answer = call(client, "GET", f"/api/company-profile/osp/change-requests/{request['id']}/documents/"
                                 f"{request['documents'][0]['id']}", S1)
     assert answer.status_code == 200
     assert answer.headers["content-type"] == "application/pdf"
@@ -284,12 +284,12 @@ def test_the_document_goes_out_over_http_with_its_content_type(client, active):
 
 # ------------------------------------------------------------------- shortName alias and lang
 def test_the_snake_case_alias_writes_the_short_name(client, active):
-    answer = call(client, "PATCH", f"/api/c3-m1/companies/{U1}", P1, json={"short_name": "Kurz"})
+    answer = call(client, "PATCH", f"/api/company-profile/companies/{U1}", P1, json={"short_name": "Kurz"})
     assert answer.status_code == 200 and answer.json()["shortName"] == "Kurz"
 
 
 def test_the_role_add_answers_in_the_requested_language(client, active):
-    answer = call(client, "POST", f"/api/c3-m1/companies/{U1}/company-roles?lang=de", P1,
+    answer = call(client, "POST", f"/api/company-profile/companies/{U1}/company-roles?lang=de", P1,
                   json={"companyRole": "APP_PROVIDER",
                         "consents": [{"agreementKey": "terms-app-provider", "version": "1.0"}]})
     assert answer.status_code == 200
@@ -298,7 +298,7 @@ def test_the_role_add_answers_in_the_requested_language(client, active):
 
 
 def test_a_malformed_json_part_is_a_validation_error(client, active):
-    answer = call(client, "POST", f"/api/c3-m1/companies/{U1}/change-requests", P1,
+    answer = call(client, "POST", f"/api/company-profile/companies/{U1}/change-requests", P1,
                   data={"data": "{nope"}, files={"documents": PDF})
     assert answer.status_code == 400 and answer.json()["type"].endswith("validation")
 

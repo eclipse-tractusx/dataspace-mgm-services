@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the migrated features are served under readable paths instead of their spec ids: `/api/registration`
+  (was `/api/c1-m2`) and `/api/company-profile` (was `/api/c3-m1`); the old paths answer 404. Problem types, event
+  sources, permissions and service accounts keep the spec id. Concept for one database per feature in a shared
+  PostgreSQL instance ([ADR-0003](docs/architecture/decisions/ADR-0003-feature-first-layout-and-runtimes.md)).
 - Outgoing HTTP calls of `portal_common.http` use one pooled client (keep-alive).
 
 - Events are CloudEvents 1.0 (`specversion`, `id`, `source` `urn:<module>`, `type`, `time`, `datacontenttype`, `data`) as proposed in the spec (FRAMEWORK 6, OP-54): `events.publish(module, type, data)`; the flat form `events.publish({"eventType": ...})` is deprecated; consumers read the content from `event["data"]`.

@@ -302,9 +302,9 @@ def test_fails_on_event_fails_the_step(engine, fake, monkeypatch):
 def test_retryable_error_three_times_then_success(engine, fake, monkeypatch):
     monkeypatch.setenv("C3_M1_URL", FAKE)
     answers = iter([(503, {"type": "urn:c3-m1:problem:upstream-error", "retryable": True})] * 3)
-    fake.answers["/api/c3-m1/steps/create-company"] = lambda b: next(
+    fake.answers["/api/company-profile/steps/create-company"] = lambda b: next(
         answers, (200, {"stepRunId": b["stepRunId"], "state": "DONE", "result": {}}))
-    fake.answers["/api/c3-m1/internal/companies/" + COMPANY] = (404, {})
+    fake.answers["/api/company-profile/internal/companies/" + COMPANY] = (404, {})
     engine.on_event(submitted())
     p = proc_of(engine, "onboarding")
     waits = []
@@ -319,7 +319,7 @@ def test_retryable_error_three_times_then_success(engine, fake, monkeypatch):
 
 def test_final_error_fails_after_one_attempt(engine, fake, monkeypatch):
     monkeypatch.setenv("C3_M1_URL", FAKE)
-    fake.answers["/api/c3-m1/steps/create-company"] = (409, {"type": "urn:c3-m1:problem:invalid-state",
+    fake.answers["/api/company-profile/steps/create-company"] = (409, {"type": "urn:c3-m1:problem:invalid-state",
                                                              "retryable": False})
     engine.on_event(submitted())
     p = proc_of(engine, "onboarding")
@@ -377,13 +377,13 @@ def _api(engine):
 
 def test_retrigger_permissions_and_state(engine, fake, monkeypatch):
     monkeypatch.setenv("C3_M1_URL", FAKE)
-    fake.answers["/api/c3-m1/steps/create-company"] = (409, {"type": "urn:c3-m1:problem:invalid-state"})
+    fake.answers["/api/company-profile/steps/create-company"] = (409, {"type": "urn:c3-m1:problem:invalid-state"})
     engine.on_event(submitted())
     p = proc_of(engine, "onboarding")
     c = _api(engine)
     url = f"/api/c12-m1/processes/{p['id']}/steps/create-company/retrigger"
     assert c.post(url, headers=bearer(person_token("rolf")), json={}).status_code == 403
-    fake.answers.pop("/api/c3-m1/steps/create-company")
+    fake.answers.pop("/api/company-profile/steps/create-company")
     r = c.post(url, headers=bearer(person_token("otto")), json={"comment": "fixed"})
     assert r.status_code == 202 and r.json()["state"] == "READY" and r.json()["attempts"] == 0
     assert step(p, "create-company")["state"] == "DONE" and published("ProcessStepRetriggered")

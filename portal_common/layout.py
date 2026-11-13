@@ -24,9 +24,10 @@
 """Where the code of a spec module lives (ADR-0003).
 
 A migrated module is a feature package `features/<name>/` (layout in `features/__init__.py`); its
-name is the readable name of the spec folder (`C1-M2-Registration` -> `registration`). A module
-without a feature package still runs from its hackathon folder `modules/<id>/`. Migrating one more
-module means creating its feature package; nothing here changes.
+name is the readable name of the spec folder (`C1-M2-Registration` -> `registration`), and so is its
+API (`/api/registration`, `base_path()`). A module without a feature package still runs from its
+hackathon folder `modules/<id>/` under the spec's `/api/<module>`. Migrating one more module means
+creating its feature package; nothing here changes.
 """
 from __future__ import annotations
 
@@ -43,6 +44,14 @@ def feature(module: str) -> str | None:
     """Readable name of the module's feature package, or None while it is still in `modules/`."""
     name = spec.module(module).name
     return name if importlib.util.find_spec(f"features.{name}") else None
+
+
+def base_path(module: str) -> str:
+    """Base path of the module's API: a feature is served under its readable name (`registration` ->
+    `/api/registration`, `company_profile` -> `/api/company-profile`), a module in `modules/` under the
+    spec's `/api/<module>` until it migrates. The old spec path is not served for a feature."""
+    name = feature(module)
+    return f"/api/{name.replace('_', '-')}" if name else spec.module(module).spec_path
 
 
 def features() -> dict[str, str]:

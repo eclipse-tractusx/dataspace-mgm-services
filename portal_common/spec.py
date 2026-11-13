@@ -97,13 +97,21 @@ class Operation:
 class ModuleSpec:
     id: str              # e.g. c3-m1
     folder: str          # e.g. C3-M1-CompanyProfile
-    base_path: str       # e.g. /api/c3-m1
+    spec_path: str       # base path in the spec's `servers`, e.g. /api/c3-m1
     operations: tuple[Operation, ...]
     document: dict = field(compare=False, hash=False, repr=False)
 
     @property
     def package(self) -> str:
         return self.id.replace("-", "_")
+
+    @property
+    def base_path(self) -> str:
+        """Base path the installation serves: `/api/<readable-name>` for a migrated feature, otherwise the spec's
+        `/api/<module>` (ADR-0003, `portal_common.layout.base_path`). Every router and HTTP caller reads this."""
+        from portal_common import layout   # layout depends on spec, not the other way round
+
+        return layout.base_path(self.id)
 
     @property
     def name(self) -> str:

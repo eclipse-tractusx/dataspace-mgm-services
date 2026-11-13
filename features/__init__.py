@@ -36,7 +36,8 @@ Every feature has the same shape, so a reader finds the same thing in the same p
         models/          value sets and data models of the API (when the feature has its own)
 
 The feature name is the readable name of the spec folder (`C1-M2-Registration` -> `registration`);
-the spec id stays at the edge only (`/api/c1-m2`, `urn:c1-m2:problem:...`, `svc-c1-m2`). Runtimes in
+its API carries the same name (`/api/registration`, `portal_common.layout.base_path`). The spec id stays
+only in identifiers that are not addresses (`urn:c1-m2:problem:...`, event sources, `svc-c1-m2`). Runtimes in
 `runtimes/` import features and serve one or several of them. A spec module without a feature folder
 still runs from its hackathon folder `modules/<id>/`.
 """

@@ -148,7 +148,7 @@ def _h(person: str) -> dict:
 
 
 def api(path: str) -> str:
-    return "/api/c1-m2" + path
+    return "/api/registration" + path
 
 
 def onboarding(token: str, **over) -> dict:

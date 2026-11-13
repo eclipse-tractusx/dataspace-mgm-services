@@ -217,7 +217,7 @@ def test_only_active_companies_take_an_attestation():
 
 # ------------------------------------------------------------------------------------ 13.11 over HTTP
 def test_the_endpoint_checks_permission_and_scope(client, active):
-    url = f"/api/c3-m1/companies/{U1}/attestation-updates"
+    url = f"/api/company-profile/companies/{U1}/attestation-updates"
     body = {"attestation": sign(claims())}
     assert call(client, "POST", url, "max", json=body).status_code == 403     # Member
     assert call(client, "POST", url, P3, json=body).status_code == 404        # other company
