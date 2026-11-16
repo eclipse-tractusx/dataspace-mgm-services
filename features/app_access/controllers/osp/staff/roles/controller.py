@@ -29,7 +29,7 @@ from fastapi import Body
 
 from features.app_access.models import StaffMember
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import osp_actor, services
+from features.app_access.interface import osp_actor, services
 from portal_common.routing import Controller, Permission
 
 controller = Controller("App Access: OSP Staff")
@@ -38,5 +38,5 @@ controller = Controller("App Access: OSP Staff")
 @controller.put("", operation_id="setStaffRoles", response_model=StaffMember,
                 summary="Set the staff roles of an account")
 @translated
-def set_staff_roles(userId: str, body: dict = Body(...), claims: dict = Permission):
+def set_staff_roles(userId: str, body: dict = Body(...), claims: dict = Permission) -> StaffMember:
     return services().users.set_staff_roles(userId, body, osp_actor(claims))

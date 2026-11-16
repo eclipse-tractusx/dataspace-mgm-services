@@ -29,7 +29,7 @@ from fastapi import Body
 
 from features.app_access.models import CompanyUser
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import osp_actor, services
+from features.app_access.interface import osp_actor, services
 from portal_common.routing import Controller, Permission
 
 controller = Controller("App Access: OSP Users")
@@ -38,5 +38,6 @@ controller = Controller("App Access: OSP Users")
 @controller.put("", operation_id="setUserPortalRolesAsOsp", response_model=CompanyUser,
                 summary="Set the portal roles of a person in any company")
 @translated
-def set_user_portal_roles_as_osp(companyId: str, userId: str, body: dict = Body(...), claims: dict = Permission):
+def set_user_portal_roles_as_osp(companyId: str, userId: str, body: dict = Body(...),
+                                 claims: dict = Permission) -> CompanyUser:
     return services().users.set_company_user_portal_roles(companyId, userId, body, osp_actor(claims), as_osp=True)

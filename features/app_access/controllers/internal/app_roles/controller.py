@@ -34,5 +34,6 @@ controller = Controller("App Access: Queries")
 
 
 @controller.get("", operation_id="listAppRoles", summary="App roles of one or more apps, from their templates")
-def list_app_roles(appId: list[str] | None = Query(None), lang: str | None = Query(None), _: dict = Permission):
+def list_app_roles(appId: list[str] | None = Query(None), lang: str | None = Query(None),
+                   _: dict = Permission) -> list[dict]:
     return interface.list_app_roles(appId=appId, lang=lang)

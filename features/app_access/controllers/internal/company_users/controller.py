@@ -38,5 +38,5 @@ UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
 @controller.get("", operation_id="listCompanyUserRefs", summary="People of a company, optionally with a portal role")
 def list_company_user_refs(companyId: str | None = Query(None, pattern=UUID_PATTERN), portalRole: str | None = None,
                            status: list[str] | None = Query(None, description="May be given several times."),
-                           _: dict = Permission):
+                           _: dict = Permission) -> list[dict]:
     return interface.list_company_user_refs(companyId=companyId, portalRole=portalRole, status=status)

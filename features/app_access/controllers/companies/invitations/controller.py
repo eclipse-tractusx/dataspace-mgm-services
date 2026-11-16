@@ -25,12 +25,12 @@
 """Invitations of the company by its Company Admin (README 7.7 to 7.9), scope `company`."""
 from __future__ import annotations
 
-from fastapi import Body, Query
+from fastapi import Body, Query, Response
 
+from features.app_access.interface import company_actor, services
 from features.app_access.models import Invitation, InvitationWithCode, Page as Paged
 from features.app_access.models.constants import InvitationKind
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import company_actor, services
 from portal_common.routing import Controller, Page, Permission, Size
 
 controller = Controller("App Access: Company Invitations")
@@ -41,7 +41,7 @@ controller = Controller("App Access: Company Invitations")
 @translated
 def list_invitations(companyId: str, page: int = Page, size: int = Size,
                      status: list[str] | None = Query(None, description="May be given several times."),
-                     claims: dict = Permission):
+                     claims: dict = Permission) -> Paged[Invitation]:
     company_actor(claims, companyId)
     return services().invitations.list(InvitationKind.COMPANY, companyId, status, page, size)
 
@@ -49,7 +49,8 @@ def list_invitations(companyId: str, page: int = Page, size: int = Size,
 @controller.post("", status_code=201, operation_id="createInvitation", response_model=InvitationWithCode,
                  summary="Invite a person to the company")
 @translated
-def create_invitation(companyId: str, body: dict = Body(...), claims: dict = Permission):
+def create_invitation(companyId: str, body: dict = Body(...),
+                      claims: dict = Permission) -> InvitationWithCode:
     actor = company_actor(claims, companyId)
     return services().invitations.create(InvitationKind.COMPANY, companyId, body, actor, "createInvitation")
 
@@ -57,6 +58,7 @@ def create_invitation(companyId: str, body: dict = Body(...), claims: dict = Per
 @controller.delete("/{invitationId}", status_code=204, operation_id="revokeInvitation",
                    summary="Revoke an open invitation")
 @translated
-def revoke_invitation(companyId: str, invitationId: str, claims: dict = Permission):
+def revoke_invitation(companyId: str, invitationId: str, claims: dict = Permission) -> Response:
     actor = company_actor(claims, companyId)
     services().invitations.revoke(InvitationKind.COMPANY, companyId, invitationId, actor, "revokeInvitation")
+    return Response(status_code=204)

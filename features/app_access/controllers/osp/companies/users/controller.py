@@ -25,8 +25,10 @@
 """One person of any company for the OSP staff (README 7.14), scope `osp`."""
 from __future__ import annotations
 
+from fastapi import Response
+
+from features.app_access.interface import osp_actor, services
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import osp_actor, services
 from portal_common.routing import Controller, Permission
 
 controller = Controller("App Access: OSP Users")
@@ -35,5 +37,6 @@ controller = Controller("App Access: OSP Users")
 @controller.delete("/{userId}", status_code=204, operation_id="removeUserAsOsp",
                    summary="Remove a person from any company")
 @translated
-def remove_user_as_osp(companyId: str, userId: str, claims: dict = Permission):
+def remove_user_as_osp(companyId: str, userId: str, claims: dict = Permission) -> Response:
     services().users.remove_company_user(companyId, userId, osp_actor(claims), as_osp=True)
+    return Response(status_code=204)

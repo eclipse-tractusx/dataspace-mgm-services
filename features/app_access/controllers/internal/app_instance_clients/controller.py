@@ -38,12 +38,12 @@ controller = Controller("App Access: Queries")
 def list_app_instance_clients(appId: str | None = None, offerSubscriptionId: str | None = None,
                               customerCompanyId: str | None = None, instanceKind: str | None = None,
                               status: list[str] | None = Query(None, description="May be given several times."),
-                              _: dict = Permission):
+                              _: dict = Permission) -> list[dict]:
     return interface.list_app_instance_clients(appId=appId, offerSubscriptionId=offerSubscriptionId,
                                                customerCompanyId=customerCompanyId, instanceKind=instanceKind,
                                                status=status)
 
 
 @controller.get("/{id}", operation_id="getAppInstanceClient", summary="One instance client")
-def get_app_instance_client(id: str, _: dict = Permission):  # noqa: A002 - openapi name
+def get_app_instance_client(id: str, _: dict = Permission) -> dict:  # noqa: A002 - openapi name
     return interface.get_app_instance_client(id=id)

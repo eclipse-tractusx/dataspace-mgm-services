@@ -25,12 +25,12 @@
 """Invitations to any company by the OSP staff (README 7.20 to 7.22), scope `osp`."""
 from __future__ import annotations
 
-from fastapi import Body, Query
+from fastapi import Body, Query, Response
 
+from features.app_access.interface import osp_actor, services
 from features.app_access.models import Invitation, InvitationWithCode, Page as Paged
 from features.app_access.models.constants import InvitationKind
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import osp_actor, services
 from portal_common.routing import Controller, Page, Permission, Size
 
 controller = Controller("App Access: OSP Company Invitations")
@@ -41,14 +41,15 @@ controller = Controller("App Access: OSP Company Invitations")
 @translated
 def list_invitations_as_osp(companyId: str, page: int = Page, size: int = Size,
                             status: list[str] | None = Query(None, description="May be given several times."),
-                            claims: dict = Permission):
+                            claims: dict = Permission) -> Paged[Invitation]:
     return services().invitations.list(InvitationKind.COMPANY, companyId, status, page, size)
 
 
 @controller.post("", status_code=201, operation_id="createInvitationAsOsp", response_model=InvitationWithCode,
                  summary="Invite a person to any company")
 @translated
-def create_invitation_as_osp(companyId: str, body: dict = Body(...), claims: dict = Permission):
+def create_invitation_as_osp(companyId: str, body: dict = Body(...),
+                             claims: dict = Permission) -> InvitationWithCode:
     return services().invitations.create(InvitationKind.COMPANY, companyId, body, osp_actor(claims),
                                          "createInvitationAsOsp")
 
@@ -56,6 +57,7 @@ def create_invitation_as_osp(companyId: str, body: dict = Body(...), claims: dic
 @controller.delete("/{invitationId}", status_code=204, operation_id="revokeInvitationAsOsp",
                    summary="Revoke an open invitation of any company")
 @translated
-def revoke_invitation_as_osp(companyId: str, invitationId: str, claims: dict = Permission):
+def revoke_invitation_as_osp(companyId: str, invitationId: str, claims: dict = Permission) -> Response:
     services().invitations.revoke(InvitationKind.COMPANY, companyId, invitationId, osp_actor(claims),
                                   "revokeInvitationAsOsp")
+    return Response(status_code=204)

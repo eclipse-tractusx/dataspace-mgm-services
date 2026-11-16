@@ -9,6 +9,16 @@
       "mypy": 1,
       "ruff": 2
     },
+    "features/app_access": {
+      "file-size": 1,
+      "function-size": 1,
+      "http-route": 0,
+      "module-map": 0,
+      "mypy": 57,
+      "neighbours": 0,
+      "problems": 1,
+      "ruff": 37
+    },
     "features/company_profile": {
       "file-size": 1,
       "function-size": 3,
@@ -63,16 +73,6 @@
       "neighbours": 1,
       "problems": 19,
       "ruff": 5
-    },
-    "modules/c2_m2": {
-      "file-size": 1,
-      "function-size": 1,
-      "http-route": 2,
-      "module-map": 1,
-      "mypy": 78,
-      "neighbours": 1,
-      "problems": 1,
-      "ruff": 41
     },
     "modules/c3_m2": {
       "file-size": 1,
@@ -131,7 +131,7 @@
       "ruff": 2
     },
     "tests": {
-      "ruff": 273
+      "ruff": 268
     },
     "tools": {
       "function-size": 1,

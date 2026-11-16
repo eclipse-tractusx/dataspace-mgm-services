@@ -25,11 +25,11 @@
 """People of the company (README 7.1, 7.2, 7.4), scope `company`."""
 from __future__ import annotations
 
-from fastapi import Query
+from fastapi import Query, Response
 
+from features.app_access.interface import company_actor, services
 from features.app_access.models import CompanyUser, CompanyUserDetail, Page as Paged
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import company_actor, services
 from portal_common.routing import Controller, Page, Permission, Size
 
 controller = Controller("App Access: Company Users")
@@ -40,7 +40,7 @@ controller = Controller("App Access: Company Users")
 @translated
 def list_company_users(companyId: str, page: int = Page, size: int = Size,
                        status: list[str] | None = Query(None, description="May be given several times."),
-                       claims: dict = Permission):
+                       claims: dict = Permission) -> Paged[CompanyUser]:
     company_actor(claims, companyId)
     return services().users.list_company_users(companyId, status, page, size)
 
@@ -48,7 +48,7 @@ def list_company_users(companyId: str, page: int = Page, size: int = Size,
 @controller.get("/{userId}", operation_id="getCompanyUser", response_model=CompanyUserDetail,
                 summary="One person of the company with portal roles and app roles")
 @translated
-def get_company_user(companyId: str, userId: str, claims: dict = Permission):
+def get_company_user(companyId: str, userId: str, claims: dict = Permission) -> CompanyUserDetail:
     company_actor(claims, companyId)
     return services().users.get_company_user(companyId, userId)
 
@@ -56,6 +56,7 @@ def get_company_user(companyId: str, userId: str, claims: dict = Permission):
 @controller.delete("/{userId}", status_code=204, operation_id="removeCompanyUser",
                    summary="Remove a person from the company")
 @translated
-def remove_company_user(companyId: str, userId: str, claims: dict = Permission):
+def remove_company_user(companyId: str, userId: str, claims: dict = Permission) -> Response:
     actor = company_actor(claims, companyId)
     services().users.remove_company_user(companyId, userId, actor)
+    return Response(status_code=204)

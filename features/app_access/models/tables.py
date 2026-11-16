@@ -32,14 +32,18 @@ values (roles, suspended roles, the actor of a log entry) as JSON. The columns t
 from __future__ import annotations
 
 import datetime as dt
+from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 
 from features.app_access.models.utils import MODULE
 from portal_common import database
 
-Table = database.table_base(MODULE)
+if TYPE_CHECKING:  # a class built at run time is no valid base class for mypy
+    Table = SQLModel
+else:
+    Table = database.table_base(MODULE)
 Timestamp = DateTime(timezone=True)
 
 

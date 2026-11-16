@@ -29,7 +29,7 @@ from fastapi import Query
 
 from features.app_access.models import CompanyAppRoles
 from features.app_access.models.exception_translator import translated
-from features.app_access.services.actors import company_actor, services
+from features.app_access.interface import company_actor, services
 from portal_common.routing import Controller, Permission
 
 controller = Controller("App Access: Company App Roles")
@@ -38,6 +38,7 @@ controller = Controller("App Access: Company App Roles")
 @controller.get("", operation_id="getCompanyAppRoles", response_model=CompanyAppRoles,
                 summary="App roles of an app and whether the company can assign them")
 @translated
-def get_company_app_roles(companyId: str, appId: str, lang: str | None = Query(None), claims: dict = Permission):
+def get_company_app_roles(companyId: str, appId: str, lang: str | None = Query(None),
+                           claims: dict = Permission) -> CompanyAppRoles:
     company_actor(claims, companyId)
     return services().users.get_company_app_roles(companyId, appId, lang)

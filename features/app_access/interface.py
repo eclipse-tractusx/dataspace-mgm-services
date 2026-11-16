@@ -30,18 +30,36 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
+from features.app_access.models.common import Actor
 from features.app_access.models.exception import C2M2BaseException
 from features.app_access.models.exception_translator import ExceptionTranslator
 from features.app_access.models.utils import MODULE
 from features.app_access.services import module
+from portal_common import standin
 from portal_common.models import StepResult
 
 __all__ = [
-    "MODULE", "add_app_roles", "assign_company_admin", "create_client_template", "create_instance_client",
-    "disable_company_users", "disable_instance_client", "enable_company_users", "enable_instance_client",
-    "get_app_instance_client", "list_app_instance_clients", "list_app_roles", "list_company_user_refs", "reset",
-    "update_instance_url", "update_role_descriptions",
+    "MODULE", "add_app_roles", "assign_company_admin", "company_actor", "create_client_template",
+    "create_instance_client", "disable_company_users", "disable_instance_client", "enable_company_users",
+    "enable_instance_client", "get_app_instance_client", "list_app_instance_clients", "list_app_roles",
+    "list_company_user_refs", "osp_actor", "reset", "services", "update_instance_url", "update_role_descriptions",
 ]
+
+
+def services() -> module.C2M2Module:
+    """Active instance of the module's services."""
+    return module.current()
+
+
+def company_actor(claims: dict, company_id: str) -> Actor:
+    """Scope `company` (FRAMEWORK 4.3): another company stays invisible (404)."""
+    standin.company_scope(MODULE, claims, company_id)
+    return Actor.person(claims)
+
+
+def osp_actor(claims: dict) -> Actor:
+    """Scope `osp`: the permission is the whole check; the person is the actor for the audit log."""
+    return Actor.person(claims)
 
 
 def reset() -> None:
