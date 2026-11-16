@@ -40,7 +40,7 @@ Only feature-independent shapes belong here. A model that one feature owns stays
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Annotated, Generic, Literal, TypeVar
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -58,9 +58,6 @@ CountryCode = Annotated[str, Field(pattern=r"^[A-Z]{2}$")]
 
 MAX_PAGE_SIZE = 100
 DEFAULT_PAGE_SIZE = 20
-
-T = TypeVar("T")
-
 
 class ApiModel(BaseModel):
     """Base of every model a feature exposes: snake_case in Python, camelCase in JSON."""
@@ -96,7 +93,7 @@ class StepRequest(ApiModel):
     step_run_id: Uuid
 
 
-class StepResult(ApiModel, Generic[T]):
+class StepResult[T](ApiModel):
     """Result envelope of every step: `{stepRunId, state, result}`; `RUNNING` only for long-running steps."""
 
     step_run_id: str | None = None
@@ -112,7 +109,7 @@ class StepResult(ApiModel, Generic[T]):
         return cls(step_run_id=request.step_run_id if request else None, state="RUNNING", result=result)
 
 
-class Page(ApiModel, Generic[T]):
+class Page[T](ApiModel):
     """A list response (FRAMEWORK 4.1): `page` counts from 0, `size` is 1 to 100."""
 
     items: list[T]

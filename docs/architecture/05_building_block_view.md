@@ -59,6 +59,8 @@ CloudEvents (structured or binary content mode, token of the service account of 
 The specification of each module (behaviour, data, rules, operations, steps, queries, events, errors, acceptance
 criteria and test data) is kept per module folder in the specification; see [docs/api](../api/README.md).
 
+The feature-first layout for migrated modules (`features/<feature>/`) is defined in [ADR-0003](decisions/ADR-0003-feature-first-layout-and-runtimes.md), with internal layer boundaries and quality verification defined in [ADR-0004](decisions/ADR-0004-internal-boundaries-and-quality-gate.md).
+
 ## NOTICE
 
 This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode).

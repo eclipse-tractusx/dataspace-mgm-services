@@ -248,7 +248,7 @@ def scenario_2(t: Target) -> None:
     if not t.check("precondition: company of scenario 1 is active", bool(bpn)):
         return
     endpoint = "https://edc.beispiel-maschinenbau.example/api/v1/dsp"
-    r = t.call("POST", f"{t.osp_a}/api/c6-m1/connectors", t.token(t.osp_a, "erika"),
+    r = t.call("POST", f"{t.osp_a}/api/connector/connectors", t.token(t.osp_a, "erika"),
                json={"name": "EDC Beispiel Maschinenbau", "endpoint": endpoint, "location": "DE"})
     if not t.check("C6-M1: Company Admin registers a connector -> ConnectorRegistered", r.status_code == 201, r.text[:200]):
         return

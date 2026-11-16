@@ -2,6 +2,9 @@
 
 | Date | Decision | Reason |
 |---|---|---|
+| Date | Decision | Reason |
+|---|---|---|
+| 16 Nov 2026 | **Internal boundaries, layer architecture, and quality gate** ([ADR-0004](decisions/ADR-0004-internal-boundaries-and-quality-gate.md), Refs #54). | Strict layers for `features/`, contract parity with priority route matching, and a unified quality gate with a baseline ratchet. |
 | 9 Nov 2026 | **Feature-first layout and runtimes made of features:** `features/<name>/` with `controllers/`, `services/`, `managers/`, `models/`, `router.py`, `main.py` and an index; `runtimes/` imports features into hybrid or single runtimes; onboarding (registration, company profile) as PoC ([ADR-0003](decisions/ADR-0003-feature-first-layout-and-runtimes.md)). | Readable, maintainable code with the layers of the Industry Core Hub, one folder per feature, and the choice of what runs together kept in code. |
 | 6 Nov 2026 | **One runtime per module:** the same image, selected with `ENABLED_FEATURES`, deployed as one pod per module behind path routing ([ADR-0002](decisions/ADR-0002-runtime-per-module.md)). | Scale, release and fail modules on their own without a second code base; the monolith stays the default. |
 | 6 Nov 2026 | **Events as CloudEvents 1.0** and the event inbox `POST /api/v1/events/inbox` for split-out modules ([ADR-0001](decisions/ADR-0001-events-as-cloudevents.md), proposal OP-54). | A standard format for transport and tooling; envelope and content separated; a module only publishes its own events. |

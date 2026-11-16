@@ -27,12 +27,16 @@ over HTTP with person and service tokens, plus the interface functions in-proces
 import threading
 
 import pytest
-from conftest import BASE, bearer, person_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from modules.c6_m1 import interface
-from modules.c6_m1 import router as c6
+from conftest import BASE, bearer, person_token
+from features import connector
+from features.connector import interface
+from features.connector.managers import connector_repository as repository
+from features.connector.managers import neighbour_client
+from features.connector.models.tables import ConnectorRow
+from features.connector.router import router as connector_router
 from portal_common import events, problems, tokens
 from portal_common import http as phttp
 from tools import test_iam
@@ -48,7 +52,7 @@ OTHER = "c0000002-0000-4000-8000-000000000002"
 PROCESS = "9f0e1d2c-3b4a-4c5d-8e6f-7a8b9c0d1e2f"
 RUN_1 = "1a2b3c4d-0000-4000-8000-000000000001"
 RUN_2 = "1a2b3c4d-0000-4000-8000-000000000002"
-BASE_PATH = "/api/c6-m1"
+BASE_PATH = "/api/connector"
 
 
 @pytest.fixture
@@ -58,9 +62,9 @@ def api(monkeypatch):
     app = FastAPI()
     problems.install(app)
     app.include_router(test_iam.router)
-    app.include_router(c6.router)
+    app.include_router(connector_router)
     phttp.register_local(BASE, app)
-    c6.reset()
+    connector.reset()
     iam = test_iam.iam()
     iam.bind(iam.find("erika"), HOST, "BPNLIUK2REMLK3F4")
     iam.add_portal_roles(iam.find("erika"), ["Company Admin"])
@@ -108,7 +112,8 @@ def test_1_register_company_connector(api):
     assert published("ConnectorRegistered") == [{"connectorId": c["connectorId"], "companyId": HOST,
                                                  "providerCompanyId": HOST, "type": "COMPANY_CONNECTOR",
                                                  "endpoint": ENDPOINT, "location": "DE"}]
-    assert interface.audit[-1]["operation"] == "register-connector" and interface.audit[-1]["companyId"] == HOST
+    assert repository.audit_entries()[-1].operation == "register-connector"
+    assert repository.audit_entries()[-1].company_id == HOST
 
 
 def test_2_duplicate_and_technical_user_in_use(api):
@@ -119,9 +124,9 @@ def test_2_duplicate_and_technical_user_in_use(api):
 
 
 def test_3_host_company_not_active_and_no_bpn_check(api):
-    interface.stub_companies[HOST] = "DEACTIVATED"
+    neighbour_client.stub_companies[HOST] = "DEACTIVATED"
     assert problem(register(api), 409, "company-not-active")
-    interface.stub_companies.pop(HOST)
+    neighbour_client.stub_companies.pop(HOST)
     iam = test_iam.iam()
     iam.bind(iam.find("erika"), HOST, None)     # ACTIVE company without BPN
     assert register(api).status_code == 201
@@ -172,13 +177,13 @@ def test_6_change_endpoint_only_by_provider(api):
 def test_7_delete_with_active_subscription_then_step_8_1(api):
     con = register_caas(api).json()["connectorId"]
     assert problem(api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("pia")), 409, "subscription-active")
-    interface.stub_subscriptions[SUB] = interface.stub_subscriptions[SUB] | {"status": "INACTIVE"}
+    neighbour_client.stub_subscriptions[SUB] = neighbour_client.stub_subscriptions[SUB] | {"status": "INACTIVE"}
     step = {"processId": PROCESS, "stepRunId": RUN_1, "offerSubscriptionId": SUB}
     r = api.post(f"{BASE_PATH}/steps/deactivate-subscription-connectors", headers=svc("c12-m1"), json=step)
     assert r.status_code == 200 and r.json() == {"stepRunId": RUN_1, "state": "DONE", "result": {"connectorIds": [con]}}
     assert published("ConnectorDeactivated") == [{"connectorId": con, "companyId": HOST}]
     assert api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("pia")).status_code == 204
-    assert interface.connectors[con]["status"] == "INACTIVE" and not published("ConnectorDeleted")
+    assert repository.get(con).status == "INACTIVE" and not published("ConnectorDeleted")
     assert len(published("ConnectorDeactivated")) == 1
     # INACTIVE connectors are left out of lists but stay readable
     assert api.get(f"{BASE_PATH}/connectors", headers=h("pia")).json()["total"] == 0
@@ -192,8 +197,9 @@ def test_8_unlink_technical_user_is_repeatable(api):
     step = {"processId": PROCESS, "stepRunId": RUN_1, "technicalUserId": TU}
     r = api.post(f"{BASE_PATH}/steps/unlink-technical-user", headers=svc("c12-m1"), json=step)
     assert r.json()["result"] == {"connectorIds": [con]} and r.json()["state"] == "DONE"
-    assert interface.connectors[con]["technical_user_id"] is None and interface.connectors[con]["status"] == "ACTIVE"
-    again = api.post(f"{BASE_PATH}/steps/unlink-technical-user", headers=svc("c12-m1"), json=step | {"stepRunId": RUN_2})
+    assert repository.get(con).technical_user_id is None and repository.get(con).status == "ACTIVE"
+    again = api.post(f"{BASE_PATH}/steps/unlink-technical-user", headers=svc("c12-m1"),
+                     json=step | {"stepRunId": RUN_2})
     assert again.json() == {"stepRunId": RUN_2, "state": "DONE", "result": {"connectorIds": []}}
 
 
@@ -210,10 +216,10 @@ def test_9_internal_query_for_c2_m3(api):
 
 
 def test_10_new_connector_for_pending_subscription_after_delete(api):
-    interface.stub_subscriptions[SUB] = interface.stub_subscriptions[SUB] | {"status": "PENDING"}
+    neighbour_client.stub_subscriptions[SUB] = neighbour_client.stub_subscriptions[SUB] | {"status": "PENDING"}
     con = register_caas(api).json()["connectorId"]
     assert api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("pia")).status_code == 204
-    assert interface.connectors[con]["status"] == "INACTIVE" and interface.connectors[con]["offer_subscription_id"] == SUB
+    assert repository.get(con).status == "INACTIVE" and repository.get(con).offer_subscription_id == SUB
     assert register_caas(api).status_code == 201       # same name and endpoint: the old one is INACTIVE
 
 
@@ -239,7 +245,7 @@ def test_delete_company_connector_removes_it(api):
     con = register(api).json()["connectorId"]
     assert api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("max")).status_code == 404
     assert api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("erika")).status_code == 204
-    assert con not in interface.connectors
+    assert repository.get(con) is None
     assert published("ConnectorDeleted") == [{"connectorId": con, "companyId": HOST}]
     assert problem(api.get(f"{BASE_PATH}/connectors/{con}", headers=h("erika")), 404, "not-found")
 
@@ -284,7 +290,10 @@ def test_steps_in_process_validate_and_repeat():
 @pytest.mark.parametrize("missing", ["processId", "stepRunId", "key", "not-uuid"])
 def test_steps_require_uuid_identifiers_before_any_change(step, key, missing):
     interface.reset()
-    interface.connectors["c"] = {"id": "c", "technical_user_id": TU, "offer_subscription_id": SUB, "status": "ACTIVE"}
+    repository.add(ConnectorRow(connector_id="c", name="edc", endpoint=ENDPOINT, location="DE",
+                                type="COMPANY_CONNECTOR", status="ACTIVE", provider_company_id=HOST,
+                                host_company_id=HOST, technical_user_id=TU, offer_subscription_id=SUB,
+                                created_at="2026-11-01T00:00:00Z"))
     body = {"processId": PROCESS, "stepRunId": RUN_1, key: SUB if key == "offerSubscriptionId" else TU}
     if missing == "not-uuid":
         body[key] = "abc"
@@ -293,7 +302,7 @@ def test_steps_require_uuid_identifiers_before_any_change(step, key, missing):
     with pytest.raises(problems.Problem) as e:
         getattr(interface, step)(body)
     assert e.value.status == 400 and e.value.name == "validation" and e.value.ext["retryable"] is False
-    assert interface.connectors["c"]["technical_user_id"] == TU and interface.connectors["c"]["status"] == "ACTIVE"
+    assert repository.get("c").technical_user_id == TU and repository.get("c").status == "ACTIVE"
     interface.reset()
 
 
@@ -303,13 +312,13 @@ def test_step_without_ids_over_http_is_400(api):
 
 
 def test_8_1_clears_the_link_of_a_connector_deleted_while_pending(api):
-    interface.stub_subscriptions[SUB] = interface.stub_subscriptions[SUB] | {"status": "PENDING"}
+    neighbour_client.stub_subscriptions[SUB] = neighbour_client.stub_subscriptions[SUB] | {"status": "PENDING"}
     con = register_caas(api, technicalUserId=TU).json()["connectorId"]
     assert api.delete(f"{BASE_PATH}/connectors/{con}", headers=h("pia")).status_code == 204   # INACTIVE, link stays
-    assert interface.connectors[con]["technical_user_id"] == TU
+    assert repository.get(con).technical_user_id == TU
     step = {"processId": PROCESS, "stepRunId": RUN_1, "offerSubscriptionId": SUB}            # subscription declined
     r = api.post(f"{BASE_PATH}/steps/deactivate-subscription-connectors", headers=svc("c12-m1"), json=step)
-    assert r.json()["result"] == {"connectorIds": [con]} and interface.connectors[con]["technical_user_id"] is None
+    assert r.json()["result"] == {"connectorIds": [con]} and repository.get(con).technical_user_id is None
     assert len(published("ConnectorDeactivated")) == 1          # only the delete changed the status
     again = api.post(f"{BASE_PATH}/steps/deactivate-subscription-connectors", headers=svc("c12-m1"),
                      json=step | {"stepRunId": RUN_2})
@@ -326,15 +335,14 @@ def test_malformed_endpoint_is_400_not_500(api, endpoint):
 
 def _race(monkeypatch, calls: list) -> list[int]:
     """Runs the calls at the same time; both pass the neighbour checks before either inserts."""
-    from modules.c6_m1 import service
     barrier = threading.Barrier(len(calls))
-    real = service.company_status
+    real = neighbour_client.company_status
 
     def slow_company_status(company_id):
         status = real(company_id)
         barrier.wait(timeout=5)       # every request has passed its fail-fast checks
         return status
-    monkeypatch.setattr(service, "company_status", slow_company_status)
+    monkeypatch.setattr(neighbour_client, "company_status", slow_company_status)
     results = [None] * len(calls)
 
     def run(i):
@@ -351,7 +359,7 @@ def test_concurrent_registrations_same_name_and_endpoint(api, monkeypatch):
     results = _race(monkeypatch, [lambda: register(api), lambda: register(api)])
     assert sorted(r.status_code for r in results) == [201, 409]
     assert any(problem(r, 409, "duplicate") for r in results)
-    assert len(interface.connectors) == 1 and len(published("ConnectorRegistered")) == 1
+    assert len(repository.all_connectors()) == 1 and len(published("ConnectorRegistered")) == 1
 
 
 def test_concurrent_registrations_same_technical_user(api, monkeypatch):
@@ -359,7 +367,7 @@ def test_concurrent_registrations_same_technical_user(api, monkeypatch):
                                   lambda: register(api, name="b", technicalUserId=TU)])
     assert sorted(r.status_code for r in results) == [201, 409]
     assert any(problem(r, 409, "technical-user-not-usable") for r in results)
-    assert len(interface.connectors) == 1
+    assert len(repository.all_connectors()) == 1
 
 
 def test_concurrent_registrations_same_subscription(api, monkeypatch):
@@ -367,20 +375,19 @@ def test_concurrent_registrations_same_subscription(api, monkeypatch):
                                   lambda: register_caas(api, name="b", endpoint="https://b.example/dsp")])
     assert sorted(r.status_code for r in results) == [201, 409]
     assert any(problem(r, 409, "subscription-linked") for r in results)
-    assert len(interface.connectors) == 1
+    assert len(repository.all_connectors()) == 1
 
 
 def test_concurrent_endpoint_change_and_registration(api, monkeypatch):
     con = register(api, name="edc", endpoint="https://old.example/dsp").json()["connectorId"]
-    from modules.c6_m1 import service
     barrier = threading.Barrier(2)
-    real = service.company_status
+    real = neighbour_client.company_status
 
     def slow(company_id):
         status = real(company_id)
         barrier.wait(timeout=5)
         return status
-    monkeypatch.setattr(service, "company_status", slow)
+    monkeypatch.setattr(neighbour_client, "company_status", slow)
     out = {}
 
     def reg():
@@ -398,7 +405,7 @@ def test_concurrent_endpoint_change_and_registration(api, monkeypatch):
     # whichever runs first wins; the other sees it and answers 409 duplicate
     assert sorted([out["reg"].status_code, out["patch"].status_code]) in ([200, 409], [201, 409])
     assert problem(out["reg"] if out["reg"].status_code == 409 else out["patch"], 409, "duplicate")
-    live = [(c["name"], c["endpoint"]) for c in interface.connectors.values() if c["status"] == "ACTIVE"]
+    live = [(c.name, c.endpoint) for c in repository.all_connectors() if c.status == "ACTIVE"]
     assert len(live) == len(set(live))
 
 
@@ -418,12 +425,13 @@ def test_endpoint_without_hostname_or_with_invalid_port_is_400(api, endpoint):
 
 
 def test_no_connector_for_a_subscription_after_step_8_1(api):
-    interface.stub_subscriptions[SUB] = interface.stub_subscriptions[SUB] | {"status": "PENDING"}   # read before decline
+    # read before decline
+    neighbour_client.stub_subscriptions[SUB] = neighbour_client.stub_subscriptions[SUB] | {"status": "PENDING"}
     step = {"processId": PROCESS, "stepRunId": RUN_1, "offerSubscriptionId": SUB}
     r = api.post(f"{BASE_PATH}/steps/deactivate-subscription-connectors", headers=svc("c12-m1"), json=step)
     assert r.json()["result"] == {"connectorIds": []}
     assert problem(register_caas(api), 409, "invalid-state")
-    assert not interface.connectors and not published("ConnectorRegistered")
+    assert not repository.all_connectors() and not published("ConnectorRegistered")
 
 
 def test_internal_query_rejects_a_technical_user_id_that_is_no_uuid(api):
@@ -432,28 +440,27 @@ def test_internal_query_rejects_a_technical_user_id_that_is_no_uuid(api):
 
 
 def test_delete_asks_c10_m1_outside_the_lock(api, monkeypatch):
-    from modules.c6_m1 import service
     con = register_caas(api).json()["connectorId"]
-    interface.stub_subscriptions[SUB] = interface.stub_subscriptions[SUB] | {"status": "INACTIVE"}
+    neighbour_client.stub_subscriptions[SUB] = neighbour_client.stub_subscriptions[SUB] | {"status": "INACTIVE"}
     asked, release = threading.Event(), threading.Event()
-    real = service.subscription
+    real = neighbour_client.subscription
 
     def slow_subscription(sub_id):
         asked.set()
         release.wait(timeout=5)       # a slow C10-M1
         return real(sub_id)
-    monkeypatch.setattr(service, "subscription", slow_subscription)
+    monkeypatch.setattr(neighbour_client, "subscription", slow_subscription)
     out = {}
     t = threading.Thread(target=lambda: out.setdefault("delete", api.delete(f"{BASE_PATH}/connectors/{con}",
                                                                             headers=h("pia"))))
     t.start()
     assert asked.wait(timeout=5)
-    acquired = interface.LOCK.acquire(timeout=1)   # other requests are not blocked meanwhile
+    acquired = repository.LOCK.acquire(timeout=1)   # other requests are not blocked meanwhile
     if acquired:
-        interface.LOCK.release()
+        repository.LOCK.release()
     release.set()
     t.join()
-    assert acquired and out["delete"].status_code == 204 and interface.connectors[con]["status"] == "INACTIVE"
+    assert acquired and out["delete"].status_code == 204 and repository.get(con).status == "INACTIVE"
 
 
 def test_no_link_to_a_technical_user_after_step_8_2(api):
@@ -462,7 +469,7 @@ def test_no_link_to_a_technical_user_after_step_8_2(api):
         "connectorIds": []}
     assert problem(register(api, technicalUserId=TU), 409, "technical-user-not-usable")
     assert problem(register(api, technicalUserId=TU.upper()), 409, "technical-user-not-usable")
-    assert not interface.connectors
+    assert not repository.all_connectors()
 
 
 def test_uuid_casing_does_not_matter(api):
@@ -497,7 +504,7 @@ def test_malformed_endpoint_is_neither_stored_nor_published(api, endpoint):
     con = register(api).json()["connectorId"]
     assert problem(api.patch(f"{BASE_PATH}/connectors/{con}", headers=h("erika"),
                              json={"endpoint": endpoint}), 400, "validation")
-    assert interface.connectors[con]["endpoint"] == ENDPOINT
+    assert repository.get(con).endpoint == ENDPOINT
     assert len(published("ConnectorRegistered")) == 1 and not published("ConnectorEndpointChanged")
 
 
@@ -509,9 +516,10 @@ def test_valid_endpoints_are_accepted(api, endpoint):
 
 
 def test_swagger_tags_c6_m1_as_implemented_not_as_stand_in():
-    """standin.router() tags its routes "<module> (stand-in)"; the implemented C6-M1 must not show so."""
+    """standin.router() tags its routes "<module> (stand-in)"; the implemented C6-M1 must not show so. The
+    controllers of the feature tag them `Connector: <group>`."""
     app = FastAPI()
-    app.include_router(c6.router)
+    app.include_router(connector_router)
     tags = {tag for op in app.openapi()["paths"].values() for spec in op.values() for tag in spec["tags"]}
-    assert tags == {"c6-m1 Connectors"}
+    assert tags == {"Connector: Connectors", "Connector: Process Steps and Queries"}
 

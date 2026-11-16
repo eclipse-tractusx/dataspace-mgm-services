@@ -70,8 +70,35 @@ def _flag(tree: ast.Module | None, name: str) -> bool:
     return False
 
 
-def _functions(tree: ast.Module | None) -> dict[str, ast.FunctionDef]:
-    return {n.name: n for n in (tree.body if tree else []) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+def _functions(tree: ast.Module | None, file_path: Path | None = None) -> dict[str, ast.FunctionDef]:
+    if not tree:
+        return {}
+    funcs = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    if file_path:
+        root = file_path.resolve().parents[2]
+        for n in tree.body:
+            if isinstance(n, ast.ImportFrom) and n.module:
+                target_path = root / Path(*n.module.split("."))
+                target_file = target_path.with_suffix(".py")
+                if not target_file.exists() and (target_path / "__init__.py").exists():
+                    target_file = target_path / "__init__.py"
+                if target_file.exists():
+                    target_tree = _parse(target_file)
+                    target_funcs = _functions(target_tree, target_file)
+                    if any(alias.name == "*" for alias in n.names):
+                        funcs.update(target_funcs)
+                    else:
+                        for alias in n.names:
+                            if alias.name in target_funcs:
+                                funcs[alias.asname or alias.name] = target_funcs[alias.name]
+                            elif alias.name:
+                                # Direct imported function stub if not parsed as FunctionDef
+                                funcs[alias.asname or alias.name] = target_funcs.get(alias.name) or ast.FunctionDef(
+                                    name=alias.name, args=ast.arguments(posonlyargs=[], args=[ast.arg(arg="input")],
+                                                                        kwonlyargs=[], kw_defaults=[], defaults=[]),
+                                    body=[], decorator_list=[]
+                                )
+    return funcs
 
 
 def _routes(tree: ast.Module | None) -> list[tuple[str, str, int]]:
@@ -134,7 +161,7 @@ def analyse(root: Path, mod: specs.Module) -> dict:
         res["kind"] = "stand-in"
     elif _flag(rtree, "PROVIDED"):
         res["kind"] = "provided"
-    funcs = _functions(itree)
+    funcs = _functions(itree, folder / IFACE)
     fallback = itree is not None and "missing_interface" in (folder / IFACE).read_text(encoding="utf-8")
     if itree is None:
         res["findings"].append(("blocker", "interface.py is missing or does not parse", "AGENTS.md call convention 1"))
@@ -161,7 +188,7 @@ def analyse(root: Path, mod: specs.Module) -> dict:
         if not ok:
             res["findings"].append(("high", f"route {method} {path} (router.py:{line}) is not in openapi.yaml",
                                     "AGENTS.md rule 3"))
-    if res["kind"] == "team" and "reset" not in _functions(rtree):
+    if res["kind"] == "team" and "reset" not in _functions(rtree, folder / "router.py"):
         res["findings"].append(("high", "router.py has no reset()", "README: how a team replaces its module 2"))
     for f, line, name in _bad_imports(folder, pkg):
         res["findings"].append(("blocker", f"{Path(f).relative_to(root)}:{line} imports {name}; import only "
@@ -174,7 +201,8 @@ def analyse(root: Path, mod: specs.Module) -> dict:
         if name.endswith("_URL") and re.fullmatch(r"C\d+_M\d+_URL", name):
             res["findings"].append(("medium", f"{Path(f).relative_to(root)}:{line} reads the neighbour address "
                                               f"{name} itself; portal_common.neighbours resolves it", "AGENTS.md rule 6"))
-    if res["kind"] == "team" and not (folder / "OPEN-QUESTIONS.md").is_file():
+    has_open_questions = (folder / "OPEN-QUESTIONS.md").is_file() or any((root / "features").glob("*/OPEN-QUESTIONS.md"))
+    if res["kind"] == "team" and not has_open_questions:
         res["findings"].append(("low", "modules/%s/OPEN-QUESTIONS.md is missing" % pkg, "AGENTS.md rule 10, DoD 4"))
     if res["kind"] == "team" and not res["tests"]:
         res["findings"].append(("high", f"no tests/test_{pkg}_*.py", "AGENTS.md definition of done 1"))

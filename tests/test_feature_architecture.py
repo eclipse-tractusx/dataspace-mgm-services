@@ -87,7 +87,8 @@ def test_the_checker_finds_every_rule_on_a_broken_feature(tmp_path):
     assert result.returncode == 1, result.stderr
     found = json.loads(result.stdout)
     rules = {f["rule"] for f in found}
-    assert rules >= {"F1", "F2", "F3", "F4", "F5", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16"}, rules
+    expected = {f"F{n}" for n in (1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)}
+    assert rules >= expected, rules
     messages = " ".join(f["message"] for f in found)
     assert "features/technical_user/" in messages            # F1 names the right folder
     assert "main.py" in " ".join(f["file"] for f in found)   # F2 missing file

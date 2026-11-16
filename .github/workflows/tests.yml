@@ -23,7 +23,8 @@
 #  Assisted-By: Antigravity (Gemini 3.8 Flash)
 #################################################################################
 
-# Continuous Integration for the test suite and end-to-end acceptance:
+# Continuous Integration for the test suite, quality gate, and end-to-end acceptance:
+# - gate: runs ruff, mypy, layer boundaries, and OpenAPI contract check with baseline ratchet
 # - test: runs all unit and integration tests with pytest across modules
 # - demo: runs end-to-end multi-scenario acceptance (demo.py --small-iam)
 # - pinned spec: clones tx-arena-events/portal-backend-spec at a fixed commit into spec/
@@ -40,6 +41,39 @@ permissions:
   contents: read
 
 jobs:
+  gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout backend spec
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tx-arena-events/portal-backend-spec
+          ref: 76587a6cf8db3ea81d702e1f6cbff677053bcc85
+          path: spec
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run quality gate
+        run: uv run python tools/quality/gate.py
+
   test:
     name: Pytest
     runs-on: ubuntu-latest

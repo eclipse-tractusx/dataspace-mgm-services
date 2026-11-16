@@ -22,3 +22,22 @@
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: Claude Code (claude-opus-5-5)
 #################################################################################
+"""The connectors as their own runtime (one pod; every other module is a neighbour, ADR-0002):
+
+    uv run uvicorn --factory features.connector.main:create_app --port 8000
+    RUNTIME=connector python -m runtimes
+"""
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from features import connector
+from runtimes import create_runtime, serve
+
+
+def create_app() -> FastAPI:
+    return create_runtime(connector)
+
+
+if __name__ == "__main__":
+    serve(create_app)
