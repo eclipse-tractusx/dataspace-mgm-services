@@ -29,7 +29,7 @@
 # Notice for the image on DockerHub: DOCKER_NOTICE.md (TRG 4.06)
 
 # ---- Build stage: install the locked dependencies into a virtual environment ----
-FROM python:3.12-alpine AS builder
+FROM python:3.15-alpine AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -50,7 +50,7 @@ COPY . .
 RUN uv sync --frozen --no-dev
 
 # ---- Runtime stage: official Python image, as-is, plus a non-root user (TRG 4.02, TRG 4.03) ----
-FROM python:3.12-alpine
+FROM python:3.15-alpine
 
 ARG UID=10001
 ARG GID=10001
