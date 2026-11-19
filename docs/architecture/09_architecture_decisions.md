@@ -15,6 +15,11 @@ Decisions with a full record (context, alternatives, consequences) are in [decis
 The open questions that concern several modules are tracked as OP-xx in `open-points.md` of the specification; the
 provisional decisions of each module are listed in its own `open-points.md`.
 
+Pending review, not an accepted decision:
+[ADR-0004: Internal boundaries and quality gate](decisions/ADR-0004-internal-boundaries-and-quality-gate.md)
+proposes explicit amendments to ADR-0003 and staged quality enforcement. Add accepted decisions to the table only
+after committer approval.
+
 ## NOTICE
 
 This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode).

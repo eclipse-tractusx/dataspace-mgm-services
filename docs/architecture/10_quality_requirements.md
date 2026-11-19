@@ -10,6 +10,10 @@
 | Operability | An operator installs the chart with the default values. | The installation starts and `helm test` passes (TRG 5.08, TRG 5.09). |
 | Operability | An operator upgrades from one of the last three chart versions. | The upgrade succeeds without manual steps (TRG 5.10, TRG 5.11). |
 
+The proposed gate, its prerequisites, agent workflow and owned adoption criteria are recorded in
+[ADR-0004](decisions/ADR-0004-internal-boundaries-and-quality-gate.md), pending approval and implementation.
+Existing quality scenarios above are unchanged.
+
 ## NOTICE
 
 This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode).
