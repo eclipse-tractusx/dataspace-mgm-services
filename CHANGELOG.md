@@ -71,5 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align the Docker build and runtime images with the project's required Python 3.12 version.
 - Every module of an installation reads its own database variable (`C2_M2_DATABASE_URL`, `C3_M1_DATABASE_URL`); `DATABASE_URL` stays the fallback for a module that runs alone. Before, one `DATABASE_URL` switched C2-M2 and C3-M1 to the same database ([#54](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/54)).
 - standin.router(): accept custom tags via optional `tags` parameter ([#51](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/51)).
+- An operated installation (`TEST_TOOLS=false`) keeps its data over a restart: fresh state at every start is limited to installations with the test tools, `RESET_ON_START` overrides it, and `POST /scaffold/reset` is only served with the test tools. Before, every start emptied all feature databases. Known limit: a start with the reset on PostgreSQL still fails in App Access (`relation "app_client_template" already exists`), because the reset creates its tables before the Alembic migration runs.
+- `deploy/postgres/docker-compose.postgres.yml` provisions the feature databases from `init-feature-databases.sql`; the shell script did not run in the PostgreSQL image (`bad interpreter: Permission denied`).
 
 [Unreleased]: https://github.com/eclipse-tractusx/dataspace-mgm-service/commits/main

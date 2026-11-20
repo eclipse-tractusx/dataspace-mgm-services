@@ -18,7 +18,7 @@
 #################################################################################
 
 # Dedicated PostgreSQL service for multi-database feature persistence (ADR-0003, ADR-0005).
-# Provisions separate database and role for each feature via init-feature-databases.sh.
+# Provisions separate database and role for each feature via init-feature-databases.sql.
 # Usage:
 #   docker compose -f docker-compose.yml -f deploy/postgres/docker-compose.postgres.yml up -d
 
@@ -34,7 +34,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-feature-databases.sh:/docker-entrypoint-initdb.d/init-feature-databases.sh:ro
+      - ./init-feature-databases.sql:/docker-entrypoint-initdb.d/init-feature-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
