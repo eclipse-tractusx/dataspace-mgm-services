@@ -78,14 +78,15 @@ def _now() -> dt.datetime:
 
 
 def _parse(time: object) -> dt.datetime:
-    """CloudEvents `time` (RFC 3339) as an aware datetime; missing or invalid counts as now."""
+    """CloudEvents `time` (RFC 3339) as an aware datetime in UTC (FRAMEWORK 4.1), whatever offset the event
+    carries; missing or invalid counts as now."""
     if isinstance(time, str) and time:
         try:
             parsed = dt.datetime.fromisoformat(time)
         except ValueError:
             log.warning("event time is not RFC 3339, counted as now")
         else:
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.UTC)
+            return parsed.astimezone(dt.UTC) if parsed.tzinfo else parsed.replace(tzinfo=dt.UTC)
     elif time is not None:
         log.warning("event time is not a string, counted as now")
     return _now()

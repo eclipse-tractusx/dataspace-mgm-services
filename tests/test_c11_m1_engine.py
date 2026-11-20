@@ -163,6 +163,19 @@ def test_approval_closes_the_review_task_for_everyone():
     assert task["done"] is True and task["doneAt"]
 
 
+def test_done_at_is_utc_whatever_offset_the_closing_event_has():
+    """FRAMEWORK 4.1: times in UTC, in the inbox and in the stream event `notification-done` (README 7.6).
+    The event inbox accepts a `time` with any offset."""
+    c11.on_event(submitted())
+    mark = store.BROKER.last_id()
+    c11.on_event(ev("c1-m3", "ApplicationApproved", time="2026-11-06T11:00:00+01:00", applicationId=APPLICATION,
+                    companyId=COMPANY))
+    [task] = of_type("REVIEW_CASE_OPENED")
+    assert task["doneAt"] == "2026-11-06T10:00:00+00:00"
+    _, published = store.BROKER.after(mark)
+    assert [e.data["doneAt"] for e in published or [] if e.event == "notification-done"] == [task["doneAt"]]
+
+
 def test_declined_informs_applicant_with_reason_and_forgets_the_applicant():
     c11.on_event(submitted())
     c11.on_event(ev("c1-m3", "ApplicationDeclined", applicationId=APPLICATION, companyId=COMPANY, reason="incomplete"))
