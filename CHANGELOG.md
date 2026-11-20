@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- C11-M1 Notifications serves its operations with the `operationId` of its spec (`listNotifications`, `getNotification`, …) instead of names FastAPI generated from the paths; `docs/api/openAPI.yaml` is exported again (#106).
 - Quality gate: guard `modules/` directory discovery in `checks.py` when all legacy modules are fully migrated to `features/`.
 
 - The spec loader takes the module id from the spec folder (`C3-M1-CompanyProfile` -> `c3-m1`) instead of the `servers` URL, so the spec's readable base paths (`/api/company-profile`, FRAMEWORK 4.1, OP-55 of portal-backend-spec) load as well as the old `/api/c3-m1`.

@@ -44,7 +44,7 @@ from portal_common.routing import Controller, Permission
 controller = Controller("Notifications: Inbox")
 
 
-@controller.get("", response_model=NotificationPage)
+@controller.get("", operation_id="listNotifications", response_model=NotificationPage)
 def list_notifications(claims: dict = Permission,
                        topic: Topic | None = None,
                        ntype: Annotated[str | None, Query(alias="type")] = None,
@@ -60,13 +60,13 @@ def list_notifications(claims: dict = Permission,
                                         page=page, size=size)
 
 
-@controller.get("/count", response_model=NotificationCount)
+@controller.get("/count", operation_id="countNotifications", response_model=NotificationCount)
 def count_notifications(claims: dict = Permission) -> dict:
     """README 7.2: counters of the own inbox (hidden ones left out)."""
     return interface.count_notifications(claims)
 
 
-@controller.get("/events")
+@controller.get("/events", operation_id="streamNotificationEvents")
 def stream_notification_events(request: Request, claims: dict = Permission,
                                last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None) -> Response:
     """README 7.6: without `Last-Event-ID` only new events; an id no longer kept gives `resync`."""
@@ -74,27 +74,27 @@ def stream_notification_events(request: Request, claims: dict = Permission,
                         visible=interface.notification_stream_filter(claims), on_gap=lambda: [("resync", {})])
 
 
-@controller.get("/{notificationId}", response_model=Notification)
+@controller.get("/{notificationId}", operation_id="getNotification", response_model=Notification)
 def get_notification(notificationId: str, claims: dict = Permission) -> dict:
     """README 7.3: one notification of the own inbox with `read` for the caller."""
     return interface.get_notification(notificationId, claims)
 
 
-@controller.post("/{notificationId}/read", status_code=204)
+@controller.post("/{notificationId}/read", status_code=204, operation_id="markRead")
 def mark_read(notificationId: str, claims: dict = Permission) -> Response:
     """README 7.4: set `read_at` for the caller; idempotent, the first time is kept."""
     interface.mark_read(notificationId, claims)
     return Response(status_code=204)
 
 
-@controller.post("/{notificationId}/unread", status_code=204)
+@controller.post("/{notificationId}/unread", status_code=204, operation_id="markUnread")
 def mark_unread(notificationId: str, claims: dict = Permission) -> Response:
     """README 7.4: remove `read_at` for the caller; idempotent."""
     interface.mark_unread(notificationId, claims)
     return Response(status_code=204)
 
 
-@controller.post("/{notificationId}/hide", status_code=204)
+@controller.post("/{notificationId}/hide", status_code=204, operation_id="hideNotification")
 def hide_notification(notificationId: str, claims: dict = Permission) -> Response:
     """README 7.5: hide for the caller; an open task gives 409 `task-open`; idempotent."""
     interface.hide_notification(notificationId, claims)

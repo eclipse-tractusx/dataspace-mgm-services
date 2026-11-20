@@ -40,10 +40,11 @@ from features.notifications.managers import store, worker
 from features.notifications.models.tables import NotificationRow
 from features.notifications.router import router as c11_router
 from features.notifications.services import inbox, listing, marks
-from portal_common import database, events, problems, tokens
+from portal_common import database, events, problems, spec, tokens
 from portal_common import http as phttp
 from portal_common.problems import Problem
 from tools import test_iam
+from tools.quality import http_layer
 
 APPLICATION = "0f8e2d4c-6b1a-4c3e-8f7d-2a9b1c0d3e4f"   # FRAMEWORK 7a
 COMPANY = "c0000001-0000-4000-8000-000000000001"
@@ -338,3 +339,10 @@ def test_other_persons_notification_is_not_found_and_has_no_names(client):
 def test_inbox_needs_a_token(client):
     r = client.get(API)
     assert r.status_code == 401 and r.json()["type"] == "urn:c11-m1:problem:unauthorized"
+
+
+def test_every_operation_matches_the_contract_of_the_spec():
+    """The generated OpenAPI matches `openapi.yaml`, each `operationId` included: clients and the published
+    `docs/api/openAPI.yaml` use these names."""
+    assert spec.module(c11.MODULE).operations   # without `spec/` the comparison below finds nothing
+    assert http_layer.check_contract(c11.MODULE) == []
