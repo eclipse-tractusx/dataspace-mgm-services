@@ -333,6 +333,10 @@ frontend:
     periodSeconds: 10
   # -- Further environment variables of the frontend container
   extraEnv: []
+  # -- Further volumes for the frontend pod, e.g. the secret with the key of the BFF at the EBW-Connector
+  extraVolumes: []
+  # -- Further volume mounts for the frontend container (`BFF_EBW_KEY_FILE` names the mounted file)
+  extraVolumeMounts: []
   # -- Node selector of the frontend pods
   nodeSelector: {}
   # -- Tolerations of the frontend pods

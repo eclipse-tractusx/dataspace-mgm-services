@@ -89,12 +89,18 @@ spec:
             - name: config
               mountPath: /usr/share/nginx/html/config
               readOnly: true
+            {{- with .Values.frontend.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
         - name: config
           configMap:
             name: {{ include "dataspace-mgm.frontend.fullname" . }}-config
+        {{- with .Values.frontend.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- with .Values.frontend.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

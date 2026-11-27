@@ -1,0 +1,159 @@
+#################################################################################
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License, Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0.
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
+#
+#  AI Disclosure: This file was entirely AI-generated.
+#  The AI-generated portions are made available under CC0-1.0 and not subject
+#  to the project's license. The human contributor has reviewed and verified
+#  that the code is correct.
+#
+#  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
+#  Assisted-By: Claude Code (claude-fable-5-2)
+#################################################################################
+
+# Default values of the ebw-stack chart.
+# Set at least the three host names, the image and, for wallets on phones, TLS. One pod runs the three
+# services, because they share one volume and keep running transactions in memory.
+
+# -- Overrides the chart name
+nameOverride: ""
+# -- Overrides the full name of the release
+fullnameOverride: ""
+# -- Image pull secrets for private registries, e.g. `[{name: my-registry-secret}]`
+imagePullSecrets: []
+# -- Additional labels for all resources
+commonLabels: {}
+
+image:
+  # -- Image repository. There is no public image: build it from `ebw/Dockerfile` and push it to your registry
+  repository: ebw-stack
+  # -- Image tag; defaults to the `appVersion` of the chart
+  tag: ""
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Scheme of the public addresses: `https` (wallets on phones need it), `http` only for tests inside a cluster
+publicScheme: https
+
+# -- How a wallet returns its answer (`RESPONSE_MODE`): `direct_post.jwt` (encrypted) or `direct_post`
+responseMode: direct_post.jwt
+
+connector:
+  # -- Public host name of the EBW-Connector. It is the issuer of its tokens and part of the wallet requests
+  host: connector.ebw.example.org
+  # -- Further clients of the EBW-Connector (C5-M1 6.8), next to the demo portal and the Business Wallet of this
+  # stack. Each entry: `clientId`, `name`, `jwksUri` or `jwks`, `redirectUris`, `scopes`, optional `page`.
+  # The EBW-Connector fetches `jwksUri` itself, so it must reach that address
+  clients: []
+  # - clientId: portal-iam
+  #   name: Portal IAM of OSP A
+  #   jwksUri: https://iam.example.org/auth/realms/CX-Central/protocol/openid-connect/certs
+  #   redirectUris: [https://iam.example.org/auth/realms/CX-Central/broker/ebw-connector/endpoint]
+  #   scopes: [openid, profile]
+  #   page: {theme: tractusx, brand: Eclipse Tractus-X, tagline: Dataspace Management}
+  # -- Further settings of the EBW-Connector as environment variables (C5-M1 section 4).
+  # The short cache makes a revoked credential show within seconds, as a demo needs it
+  env:
+    STATUS_LIST_CACHE_SECONDS: "5"
+
+businessWallet:
+  # -- Public host name of the Business Wallet
+  host: business-wallet.ebw.example.org
+  # -- Further settings of the Business Wallet as environment variables
+  env: {}
+
+testTools:
+  # -- Public host name of the test tools (test issuer, trust list, demo portal under `/osp`)
+  host: test-tools.ebw.example.org
+  # -- Further settings of the test tools as environment variables
+  env: {}
+
+# -- Environment variables for all three containers
+env: {}
+# -- Further environment variables for all three containers in Kubernetes notation, e.g. from secrets
+extraEnv: []
+# -- Further volumes of the pod, e.g. a certificate of a private certificate authority
+extraVolumes: []
+# -- Further volume mounts for all three containers
+extraVolumeMounts: []
+
+# -- Host aliases of the pod. The services call each other through their public addresses; if the cluster cannot
+# reach them from inside, point the three host names at the ingress controller here,
+# e.g. `[{ip: 10.43.0.10, hostnames: [connector.ebw.example.org, ...]}]`
+hostAliases: []
+
+service:
+  # -- Service type
+  type: ClusterIP
+
+ingress:
+  # -- Whether an ingress with the three host names is created
+  enabled: true
+  # -- Ingress class name
+  className: "nginx"
+  # -- Ingress annotations, e.g. `cert-manager.io/cluster-issuer: letsencrypt-prod`
+  annotations: {}
+  # -- TLS configuration, e.g. `[{secretName: ebw-stack-tls, hosts: [connector.ebw.example.org, ...]}]`.
+  # Leave empty if the ingress controller already serves a certificate for the host names
+  tls: []
+
+persistence:
+  # -- Whether keys and data are kept on a persistent volume. Without it a restart creates new keys, and the
+  # credentials in the wallets and the company credential of the Business Wallet stop working
+  enabled: true
+  # -- Name of an existing claim; if empty, the chart creates one
+  existingClaim: ""
+  # -- Storage class; empty uses the default of the cluster
+  storageClass: ""
+  # -- Access mode
+  accessMode: ReadWriteOnce
+  # -- Size of the volume (a few key files and JSON files)
+  size: 1Gi
+
+# -- Annotations for the pod
+podAnnotations: {}
+# -- Labels for the pod
+podLabels: {}
+# -- Security context of the pod
+podSecurityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+# -- Security context of each container
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  capabilities:
+    drop:
+      - ALL
+# -- Resource requests and limits of each of the three containers (memory request = limit)
+resources:
+  requests:
+    cpu: 50m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 192Mi
+# -- Node selector of the pod
+nodeSelector: {}
+# -- Tolerations of the pod
+tolerations: []
+# -- Affinity of the pod
+affinity: {}

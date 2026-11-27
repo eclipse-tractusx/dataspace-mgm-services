@@ -1,0 +1,45 @@
+#################################################################################
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License, Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0.
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
+#
+#  AI Disclosure: This file was entirely AI-generated.
+#  The AI-generated portions are made available under CC0-1.0 and not subject
+#  to the project's license. The human contributor has reviewed and verified
+#  that the code is correct.
+#
+#  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
+#  Assisted-By: Claude Code (claude-fable-5-2)
+#################################################################################
+
+apiVersion: v2
+name: ebw-stack
+description: |
+  EBW stack for demos and tests of the Eclipse Tractus-X Dataspace Management with real wallets:
+  the EBW-Connector (reference implementation of C5-M1), a Business Wallet in the browser and test tools
+  (test issuer, trust list, demo portal). Not a product chart: it holds test keys and a test issuer.
+type: application
+# The chart version follows semantic versioning.
+version: 0.1.0
+# The version of C5-M1 that the EBW-Connector implements.
+appVersion: "0.3.0"
+home: https://github.com/eclipse-tractusx/dataspace-mgm-service
+sources:
+  - https://github.com/eclipse-tractusx/dataspace-mgm-service
+keywords:
+  - tractus-x
+  - eudi-wallet
+  - business-wallet
+  - openid4vp
+  - test

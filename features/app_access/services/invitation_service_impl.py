@@ -33,6 +33,8 @@ from pathlib import Path
 from features.app_access.managers.config import Config
 from features.app_access.managers.config.properties import as_bool, as_int, as_list
 from features.app_access.managers.dao import DaoService
+from features.app_access.managers.gateways import AttestationKeysImpl
+from features.app_access.managers.ports import AttestationKeys
 from features.app_access.models import AcceptInvitationResult, InvitationWithCode, Page
 from features.app_access.models import Invitation as InvitationModel
 from features.app_access.models.common import Actor
@@ -59,13 +61,15 @@ from features.app_access.services.ports import InvitationService
 from features.app_access.services.validation import invalid
 from portal_common import settings
 
+from .attestation_check import AttestationCheck, ConfirmedMandate
 from .user_service_impl import UserServiceImpl
 
 
 class InvitationServiceImpl(InvitationService):
-    def __init__(self, ctx: Context, users: UserServiceImpl) -> None:
+    def __init__(self, ctx: Context, users: UserServiceImpl, attestation_keys: AttestationKeys | None = None) -> None:
         self.ctx = ctx
         self.users = users
+        self.attestations = AttestationCheck(ctx.config, attestation_keys or AttestationKeysImpl(ctx.config))
 
     @property
     def cfg(self) -> Config:
@@ -140,14 +144,19 @@ class InvitationServiceImpl(InvitationService):
             self.ctx.audit(actor, operation, company_id, inv.id)
 
     def accept(self, body: dict, claims: dict) -> AcceptInvitationResult:
-        """7.10 (scope `own`): the account of `sub` redeems the code."""
+        """7.10 (scope `own`): the account of `sub` redeems the code, or shows with a verification attestation
+        that the person holds a mandate of the company that invited them (6.8a)."""
+        if ("code" in body) == ("attestation" in body):
+            raise invalid("exactly one of code and attestation")
+        if "attestation" in body:
+            return self._accept_with_mandate(self.attestations.confirmed_mandate(body["attestation"]), claims)
         code = body.get("code")
         if not isinstance(code, str) or not InvitationCode.PATTERN.match(code):
             raise invalid("code: 43 characters base64url")
         inv = self.dao.invitations.find_by_code_hash(InvitationCode.hash(code))
         if inv is None:
             raise InvitationNotFoundException("no invitation for this code")
-        user_id, actor, operation = claims["sub"], Actor.person(claims), "acceptInvitation"
+        user_id = claims["sub"]
         with self.dao.lock(self._lock(inv.kind, inv.company_id), ("invitation", inv.id), ("account", user_id)):
             if inv.status == InvitationStatus.ACCEPTED and inv.accepted_by == user_id:
                 return AcceptInvitationResult.model_validate(inv.accept_result())
@@ -163,17 +172,48 @@ class InvitationServiceImpl(InvitationService):
                     inv.end(InvitationStatus.REVOKED, InvitationEndReason.TOO_MANY_ATTEMPTS)
                 self.dao.invitations.save(inv)
                 raise NameMismatchException("the names in the token do not match the invitation")
-            if company is not None:
-                self.users.bind(user_id, company, list(inv.roles),
-                                JoinedVia.INVITATION, actor, operation, invitation_id=inv.id,
-                                given_name=claims.get("given_name"), family_name=claims.get("family_name"))
-            else:
-                self.users.add_staff_roles(user_id, list(inv.roles), actor, operation)
-            inv.end(InvitationStatus.ACCEPTED)
-            inv.accepted_by, inv.accepted_at = user_id, now()
-            self.dao.invitations.save(inv)
-            self.ctx.audit(actor, operation, inv.company_id, inv.id)
-            return AcceptInvitationResult.model_validate(inv.accept_result())
+            return self._bind_and_close(inv, company, claims)
+
+    def _bind_and_close(self, inv: Invitation, company: Company | None, claims: dict) -> AcceptInvitationResult:
+        """7.10 steps 6 to 8, inside the locks of the caller."""
+        user_id, actor, operation = claims["sub"], Actor.person(claims), "acceptInvitation"
+        if company is not None:
+            self.users.bind(user_id, company, list(inv.roles),
+                            JoinedVia.INVITATION, actor, operation, invitation_id=inv.id,
+                            given_name=claims.get("given_name"), family_name=claims.get("family_name"))
+        else:
+            self.users.add_staff_roles(user_id, list(inv.roles), actor, operation)
+        inv.end(InvitationStatus.ACCEPTED)
+        inv.accepted_by, inv.accepted_at = user_id, now()
+        self.dao.invitations.save(inv)
+        self.ctx.audit(actor, operation, inv.company_id, inv.id)
+        return AcceptInvitationResult.model_validate(inv.accept_result())
+
+    def _accept_with_mandate(self, mandate: ConfirmedMandate, claims: dict) -> AcceptInvitationResult:
+        """6.8a: the mandate names the company, the names find the invitation. No code is needed and none is counted."""
+        person = {"given_name": mandate.given_name, "family_name": mandate.family_name}
+        if (NameCheck.normalize(claims.get("given_name")), NameCheck.normalize(claims.get("family_name"))) != (
+                NameCheck.normalize(mandate.given_name), NameCheck.normalize(mandate.family_name)):
+            raise NameMismatchException("the names in the token do not match the attestation")
+        companies = sorted({cid for value in mandate.company_identifiers
+                            for cid in self.ctx.company_profiles.active_companies_with(value)})
+        if len(companies) != 1:
+            raise CompanyNotActiveException("no single ACTIVE company of this installation has the identifier of "
+                                            "the mandate")
+        company_id, user_id = companies[0], claims["sub"]
+        with self.dao.lock(self._lock(InvitationKind.COMPANY, company_id), ("account", user_id)):
+            invitations = sorted(self.dao.invitations.list_of(InvitationKind.COMPANY, company_id),
+                                 key=lambda i: i.created_at, reverse=True)
+            accepted = next((i for i in invitations
+                             if i.status == InvitationStatus.ACCEPTED and i.accepted_by == user_id), None)
+            binding = self.dao.company_users.current_of(user_id)
+            if accepted is not None and binding is not None and binding.invitation_id == accepted.id:
+                return AcceptInvitationResult.model_validate(accepted.accept_result())
+            inv = next((i for i in invitations
+                        if i.effective_status() == InvitationStatus.OPEN and NameCheck.matches(person, i)), None)
+            if inv is None:
+                raise InvitationNotFoundException("no open invitation of the company for this person")
+            return self._bind_and_close(inv, self._check_account(inv, user_id), claims)
 
     def _check_account(self, inv: Invitation, user_id: str) -> Company | None:
         """7.10 step 4; the company to bind the account to for a company invitation, None for a staff invitation."""

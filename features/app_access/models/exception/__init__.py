@@ -36,7 +36,13 @@ from .company import (
                       UserAlreadyBoundException,
 )
 from .external import IamErrorException, UpstreamErrorException
-from .invitation import InvitationNotOpenException, NameMismatchException, TooManyInvitationsException
+from .invitation import (
+                         AttestationInvalidException,
+                         InvitationNotOpenException,
+                         NameMismatchException,
+                         RepresentationNotConfirmedException,
+                         TooManyInvitationsException,
+)
 from .not_found import InvitationNotFoundException, NotFoundException, RoleNotFoundException, UserNotFoundException
 from .validation import UnknownAppRoleException, ValidationException
 
@@ -47,6 +53,7 @@ ALL_EXCEPTIONS: tuple[type[C2M2BaseException], ...] = (
     InvalidStateException, ConflictException, CompanyNotActiveException, UserAlreadyBoundException,
     StaffCompanyConflictException, LastCompanyAdminException, LastOspAdminException,
     InvitationNotOpenException, NameMismatchException, TooManyInvitationsException,
+    AttestationInvalidException, RepresentationNotConfirmedException,
     IamErrorException, UpstreamErrorException,
 )
 

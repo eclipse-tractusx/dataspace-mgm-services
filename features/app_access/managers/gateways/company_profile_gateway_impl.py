@@ -43,3 +43,13 @@ class CompanyProfileGatewayImpl(NeighbourGateway, CompanyProfileGateway):
         if isinstance(found, list):
             raise UpstreamErrorException(f"{self.TARGET} query_company gave a list, not a company", retryable=True)
         return found
+
+    def active_companies_with(self, identifier: str) -> list[str]:
+        if self.is_standin():
+            return [c["id"] for c in self.stub_items()
+                    if c["status"] == "ACTIVE" and identifier in (c.get("ebwoid"), c.get("euid"))]
+        found = self.query("find_identifier_matches", statuses=["ACTIVE"],
+                           identifiers=[{"type": kind, "value": identifier} for kind in ("EBWOID", "EUID")])
+        if not isinstance(found, dict):
+            raise UpstreamErrorException(f"{self.TARGET} find_identifier_matches gave no result", retryable=True)
+        return [match["companyId"] for match in found.get("matches") or []]

@@ -32,3 +32,7 @@ class CompanyProfileGateway(abc.ABC):
 
     @abc.abstractmethod
     def company(self, company_id: str) -> dict | None: ...
+
+    @abc.abstractmethod
+    def active_companies_with(self, identifier: str) -> list[str]:
+        """The IDs of the `ACTIVE` companies of the installation that have this EBWOID or EUID (6.8a)."""

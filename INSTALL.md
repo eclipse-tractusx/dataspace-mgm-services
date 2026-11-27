@@ -118,6 +118,11 @@ export C2_M2_DATABASE_URL=postgresql://postgres:local-test-only@localhost:5432/c
 uv run python demo.py
 ```
 
+Restart and data: with the test tools (`TEST_TOOLS=true`, the default) every start begins with fresh state, as the
+tests and `demo.py` expect. An operated installation (`TEST_TOOLS=false`) keeps its data over a restart and does not
+serve `POST /scaffold/reset`. `RESET_ON_START=true|false` overrides the start behaviour, for example
+`RESET_ON_START=false` to keep the data of a test installation with PostgreSQL.
+
 Build and run the container image:
 
 ```shell

@@ -27,7 +27,7 @@
 import json
 from html import escape
 
-from common.web import page, qr
+from common.web import THEMES, page, qr
 from connector import config
 from connector.transactions import Step, Transaction
 
@@ -48,6 +48,7 @@ TEXT = {
     "copy_intro": "Or copy this link and paste it into the Business Wallet:",
     "copy": "Copy link",
     "waiting": "This page continues as soon as the wallet has answered.",
+    "checked_by": "The EBW-Connector checks the credentials on behalf of {client}.",
     "done_title": "Step done",
     "done": "The wallet has answered. Please continue on your other device.",
     "error_title": "Invalid request",
@@ -77,6 +78,20 @@ function openBusinessWallet() {
 }
 function copyRequest() { navigator.clipboard.writeText(document.getElementById("request-link").textContent); }
 </script>"""
+
+
+OWN_LOOK = {"brand": "EBW-Connector", "theme": "connector", "tagline": TEXT["tagline"]}
+
+
+def look_of(client: dict) -> dict:
+    """Brand, theme and tagline of the transaction page for a client: those of its `page` (6.8), so that a person
+    sees which service they are signing in to. Without `page`, or with a theme this stack does not have, the look
+    of the EBW-Connector itself."""
+    wanted = client.get("page")
+    if not isinstance(wanted, dict) or wanted.get("theme") not in THEMES or wanted["theme"] == OWN_LOOK["theme"]:
+        return OWN_LOOK
+    brand = str(wanted.get("brand") or client.get("name") or client["clientId"])
+    return {"brand": brand, "theme": wanted["theme"], "tagline": str(wanted.get("tagline") or ""), "home": "#"}
 
 
 def _wallet_link(step: Step) -> str:
@@ -113,13 +128,17 @@ def transaction_page(tx: Transaction) -> str:
             + BUSINESS_WALLET % json.dumps(step.link_params)
         )
     body += f'<p class="muted">{escape(t["waiting"])}</p>'
+    look = look_of(tx.client)
+    if look is not OWN_LOOK:
+        # The page looks like the client, so it says who runs it.
+        body += f'<p class="muted" id="checked-by">{escape(t["checked_by"].format(client=look["brand"]))}</p>'
     body += POLL % (json.dumps({"status": tx.status, "step": step.name}), tx.id)
-    return page(t["title"], body, brand="EBW-Connector", theme="connector", tagline=t["tagline"])
+    return page(t["title"], body, **look)
 
 
 def done_page() -> str:
-    return page(TEXT["done_title"], f"<p>{escape(TEXT['done'])}</p>", brand="EBW-Connector", theme="connector", tagline=TEXT["tagline"])
+    return page(TEXT["done_title"], f"<p>{escape(TEXT['done'])}</p>", **OWN_LOOK)
 
 
 def error_page(message: str) -> str:
-    return page(TEXT["error_title"], f'<p class="fail">{escape(message)}</p>', brand="EBW-Connector", theme="connector", tagline=TEXT["tagline"])
+    return page(TEXT["error_title"], f'<p class="fail">{escape(message)}</p>', **OWN_LOOK)

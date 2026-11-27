@@ -23,8 +23,11 @@
 #  Assisted-By: GitHub Copilot (claude-opus-5-5)
 #################################################################################
 """Errors of invitations (6.8)."""
+from .attestation_invalid_exception import AttestationInvalidException
 from .invitation_not_open_exception import InvitationNotOpenException
 from .name_mismatch_exception import NameMismatchException
+from .representation_not_confirmed_exception import RepresentationNotConfirmedException
 from .too_many_invitations_exception import TooManyInvitationsException
 
-__all__ = ["InvitationNotOpenException", "NameMismatchException", "TooManyInvitationsException"]
+__all__ = ["AttestationInvalidException", "InvitationNotOpenException", "NameMismatchException",
+           "RepresentationNotConfirmedException", "TooManyInvitationsException"]

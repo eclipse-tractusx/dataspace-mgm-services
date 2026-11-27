@@ -28,6 +28,7 @@ import json
 import os
 import time
 from html import escape
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -172,12 +173,14 @@ def index():
         '<label for="birthdate">Date of birth</label><input id="birthdate" name="birthdate" type="date" required>'
         "<button>Offer test PID</button></form></div>"
         '<div class="box"><h2>Business Wallet</h2>'
-        "<p>LPID of Beispiel Maschinenbau GmbH. Paste the link in the Business Wallet under "
-        "“Fetch the company credential (LPID)”.</p>"
+        "<p>LPID of Beispiel Maschinenbau GmbH. Open it in the Business Wallet and click Fetch there, or paste the "
+        "link in the Business Wallet under “Fetch the company credential (LPID)”.</p>"
         + offer_box(
             company_offer,
             f'<pre id="lpid-link">{escape(company_link)}</pre>'
-            "<p><button class=\"secondary\" onclick=\"copyText('lpid-link')\">Copy link</button></p>",
+            f'<p><a class="button" href="{escape(config.BUSINESS_WALLET_URL + "/?" + urlencode({"offer": company_link}))}" '
+            'target="_blank" rel="noopener">Open in Business Wallet</a> '
+            "<button class=\"secondary\" onclick=\"copyText('lpid-link')\">Copy link</button></p>",
             '<a class="button secondary" href="/">New link</a>',
         )
         + '</div><div class="box"><h2>Core services</h2><p>Signed trust list: '

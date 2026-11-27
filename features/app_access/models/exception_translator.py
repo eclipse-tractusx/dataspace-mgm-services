@@ -31,6 +31,7 @@ from collections.abc import Callable
 
 from features.app_access.models.errors import problem
 from features.app_access.models.exception import (
+    AttestationInvalidException,
     C2M2BaseException,
     CompanyNotActiveException,
     ConflictException,
@@ -44,6 +45,7 @@ from features.app_access.models.exception import (
     NameMismatchException,
     NoActiveSubscriptionException,
     NotFoundException,
+    RepresentationNotConfirmedException,
     RoleNotFoundException,
     StaffCompanyConflictException,
     TemplateMissingException,
@@ -65,7 +67,9 @@ class ExceptionTranslator:
     RULES: dict[type[C2M2BaseException], tuple[int, str]] = {
         ValidationException: (400, "validation"),
         UnknownAppRoleException: (400, "unknown-app-role"),
+        AttestationInvalidException: (400, "attestation-invalid"),
         NameMismatchException: (403, "name-mismatch"),
+        RepresentationNotConfirmedException: (403, "representation-not-confirmed"),
         NotFoundException: (404, "not-found"),
         RoleNotFoundException: (404, "role-not-found"),
         InvitationNotFoundException: (404, "invitation-not-found"),

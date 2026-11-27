@@ -54,6 +54,14 @@ Who calls it:
   code appears once, in the response that creates it. States: `OPEN`, then `ACCEPTED`, `REVOKED` or `EXPIRED`. A
   background job (`services/invitation_cleanup_job_impl.py`, hourly) expires overdue invitations; at start-up the
   bootstrap of README 6.9 invites the first OSP Admin from `BOOTSTRAP_ADMIN_FILE`.
+- **Accepting with a mandate.** `POST /invitations/accept` takes either the code or a verification attestation of the
+  EBW-Connector (C5-M1) with the purpose `representation`: a person showed a mandate of a company in their wallet.
+  `services/attestation_check.py` checks the attestation (format, type, issuer, signature, audience, times, claims,
+  purpose, client, age); the keys come from `managers/gateways/attestation_keys_impl.py`. The service then compares
+  the person with the token, asks C3-M1 for the one `ACTIVE` company with the identifier of the mandate
+  (`find_identifier_matches`) and accepts the newest open invitation of that company for this person. The
+  invitation and its roles stay required; only the code is replaced. Without `ATTESTATION_ISSUER` no attestation is
+  accepted. This way is not in the spec yet (OPEN-QUESTIONS 14).
 - **App clients.** `create-client-template` keeps the app roles of an app; `create-instance-client` creates a
   disabled instance client from it, which the enable, disable and update steps change (README 6.1 to 6.4).
 - **Concurrency.** `DaoService.lock(...)` takes the locks of README 6.14 in a fixed order (advisory locks in
@@ -88,7 +96,10 @@ Published with source `urn:c2-m2` (README 10): `UserAssignedToCompany`, `UserRem
 `managers/config/application.properties` maps the variables of README section 4 (`C2_M2_CONFIG_FILE` names another
 file): `APP_ACCESS_DATABASE_URL`, `C2_M2_DATABASE_URL` or `DATABASE_URL`, `IAM_URL`, `IAM_REALM`, `C2_M2_CLIENT_ID`, `C2_M2_CLIENT_SECRET`,
 `PORTAL_CORE_CLIENT_ID`, the role names, the invitation limits (`INVITATION_TTL_HOURS`, `INVITATION_MAX_OPEN`, ...),
-`BOOTSTRAP_ADMIN_FILE`, the client ID prefixes and scopes, `LANGUAGES` and `QUERY_MAX_APPS`. The data is in the
+`BOOTSTRAP_ADMIN_FILE`, the client ID prefixes and scopes, `LANGUAGES` and `QUERY_MAX_APPS`, and for accepting with a
+mandate `ATTESTATION_ISSUER`, `ATTESTATION_JWKS_URL`, `ATTESTATION_JWKS_FILE`, `ATTESTATION_AUDIENCE`,
+`ATTESTATION_CLIENT_IDS`, `ATTESTATION_CLOCK_SKEW_SECONDS`, `ATTESTATION_JWKS_CACHE_SECONDS` (the names of the
+registration, so one value per installation serves both) and `INVITATION_ATTESTATION_MAX_AGE_MINUTES`. The data is in the
 SQLModel tables of `models/tables.py` (`portal_common.database`): with a database URL in PostgreSQL (driver `pg8000`,
 schema upgraded by Alembic at start, version table `alembic_version_c2_m2`), without one in a private in-memory
 SQLite database, which starts empty and is emptied by `reset()`; bootstrap and invitation cleanup only run with a

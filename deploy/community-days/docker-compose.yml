@@ -1,0 +1,212 @@
+#################################################################################
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License, Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0.
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
+#
+#  AI Disclosure: This file was entirely AI-generated.
+#  The AI-generated portions are made available under CC0-1.0 and not subject
+#  to the project's license. The human contributor has reviewed and verified
+#  that the code is correct.
+#
+#  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
+#  Assisted-By: Claude Code (claude-opus-5-5)
+#################################################################################
+# The whole Data Space Management portal on one machine (Community Days, plan B): PostgreSQL, the test Portal IAM
+# (Keycloak with the realms of iam/test/import/hackathon), the CSP stand-in, OSP A and the portal with its BFF.
+# Test values only, not for operation. Start: `docker compose up -d --build` in this folder; README.md.
+#
+# One issuer for everybody: Keycloak issues its tokens for http://localhost:8080/auth. The test realm fixes that
+# address (identity provider ebw-connector, redirect URIs of TEST-EBW), so the browser reaches Keycloak there, and
+# inside the CSP stand-in, the backend and the portal a forwarder (localhost-link.*) makes localhost:8080 reach the
+# Keycloak container. Tokens therefore carry the same `iss` for the browser, the BFF and the backend.
+name: community-days
+
+x-backend-build: &backend-build
+  context: ../..
+  dockerfile: Dockerfile
+
+x-iam-link: &iam-link ./localhost-link.py:/opt/community-days/localhost-link.py:ro
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-test-only}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # one database and role per feature (ADR-0003, ADR-0005); runs only on the first start of an empty volume
+      - ../postgres/init-feature-databases.sql:/docker-entrypoint-initdb.d/init-feature-databases.sql:ro
+    healthcheck:
+      # over TCP: during the first initialisation PostgreSQL listens on its socket only
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  iam:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.8.1}
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-relative-path=/auth"]
+    environment:
+      KC_HOSTNAME: http://localhost:8080/auth
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-test-only}
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      # accounts, company bindings and roles survive a restart; a realm that exists is not imported again
+      - keycloak-data:/opt/keycloak/data
+      - ../../iam/test/import/hackathon:/opt/keycloak/data/import:ro
+    healthcheck:
+      # the image has no curl or wget; the discovery document answers once the realms are imported
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /auth/realms/CX-Central/.well-known/openid-configuration HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 60
+
+  keys:
+    build: *backend-build
+    image: dataspace-mgm-service:community-days
+    user: "0"
+    restart: "no"
+    command: ["python", "/opt/community-days/make-keys.py"]
+    environment:
+      IAM_PUBLIC_URL: http://localhost:8080/auth
+      IAM_REALM: CX-Central
+      BACKEND_URL: http://backend:8000
+    volumes:
+      - keys:/keys
+      - ./make-keys.py:/opt/community-days/make-keys.py:ro
+
+  csp:
+    build: *backend-build
+    image: dataspace-mgm-service:community-days
+    restart: unless-stopped
+    command: ["python", "/opt/community-days/localhost-link.py", "8080", "iam",
+              "-m", "uvicorn", "tools.csp_standin.app:app", "--host", "0.0.0.0", "--port", "8100"]
+    environment:
+      CSP_TRUST_FILE: /keys/csp-trust.json
+      CSP_SIGNING_KEY_FILE: /keys/csp-key.json
+      CSP_PUBLIC_URL: http://csp:8100
+    volumes:
+      - keys:/keys
+      - *iam-link
+    networks:
+      default:
+        # the test realm reads the keys of the CSP service accounts (sa-csp*) from host.docker.internal:8100
+        aliases: [host.docker.internal]
+    depends_on:
+      keys:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8100/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: *backend-build
+    image: dataspace-mgm-service:community-days
+    restart: unless-stopped
+    command: ["python", "/opt/community-days/localhost-link.py", "8080", "iam", "-m", "runtimes"]
+    environment:
+      SETTINGS_FILE: /app/config/osp-a/installation.json
+      BASE_URL: http://backend:8000
+      SPEC_DIR: /spec
+      IAM_URL: http://localhost:8080/auth
+      IAM_REALM: CX-Central
+      KEYCLOAK_ADMIN_USER: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-test-only}
+      # Test tools: EBW-Connector and provider system doubles, realm reset, POST /scaffold/reset (README.md).
+      # The backend port is not published; the BFF forwards only /api/**, so the test tools are not reachable
+      # from the browser.
+      TEST_TOOLS: ${TEST_TOOLS:-true}
+      RESET_ON_START: "false"   # keep the data over restarts
+      CSP_URL: http://csp:8100/v1
+      CSP_TOKEN_URL: http://csp:8100/oauth/token
+      CSP_JWKS_URL: http://csp:8100/.well-known/jwks.json
+      OSP_SIGNING_KEY_FILE: /keys/osp-a-key.json
+      RETRY_BASE_SECONDS: "1"
+      RETRY_MAX_SECONDS: "4"
+      WORKER_POLL_SECONDS: "0.5"
+      AWAIT_TIMEOUT: PT60S
+      REGISTRATION_DATABASE_URL: postgresql://registration:registration_test_pass@postgres:5432/registration
+      APPLICATION_REVIEW_DATABASE_URL: postgresql://application_review:application_review_test_pass@postgres:5432/application_review
+      APP_ACCESS_DATABASE_URL: postgresql://app_access:app_access_test_pass@postgres:5432/app_access
+      TECHNICAL_USER_DATABASE_URL: postgresql://technical_user:technical_user_test_pass@postgres:5432/technical_user
+      COMPANY_PROFILE_DATABASE_URL: postgresql://company_profile:company_profile_test_pass@postgres:5432/company_profile
+      CSP_CONNECTION_DATABASE_URL: postgresql://csp_connection:csp_connection_test_pass@postgres:5432/csp_connection
+      CREDENTIALS_DATABASE_URL: postgresql://credentials:credentials_test_pass@postgres:5432/credentials
+      DATASPACE_WALLET_INTERFACE_DATABASE_URL: postgresql://dataspace_wallet_interface:dataspace_wallet_interface_test_pass@postgres:5432/dataspace_wallet_interface
+      CONNECTOR_DATABASE_URL: postgresql://connector:connector_test_pass@postgres:5432/connector
+      OFFERS_DATABASE_URL: postgresql://offers:offers_test_pass@postgres:5432/offers
+      SUBSCRIPTIONS_DATABASE_URL: postgresql://subscriptions:subscriptions_test_pass@postgres:5432/subscriptions
+      NOTIFICATIONS_DATABASE_URL: postgresql://notifications:notifications_test_pass@postgres:5432/notifications
+      PROCESS_ORCHESTRATION_DATABASE_URL: postgresql://process_orchestration:process_orchestration_test_pass@postgres:5432/process_orchestration
+    volumes:
+      - keys:/keys
+      - ${SPEC_PATH:-../../spec}:/spec:ro
+      - *iam-link
+    depends_on:
+      postgres:
+        condition: service_healthy
+      iam:
+        condition: service_healthy
+      csp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+
+  portal:
+    build:
+      context: ${UI_PATH:-../../../dataspace-mgm-ui}
+      dockerfile: apps/portal-bff/Dockerfile
+    image: dataspace-mgm-ui-bff:community-days
+    restart: unless-stopped
+    command: ["node", "/opt/community-days/localhost-link.mjs"]
+    environment:
+      BFF_PUBLIC_URL: ${PORTAL_URL:-http://localhost:${PORTAL_PORT:-3000}}
+      BFF_ISSUER_URL: http://localhost:8080/auth/realms/CX-Central
+      BFF_CLIENT_ID: portal-ui
+      BFF_BACKEND_URL: http://backend:8000
+      BFF_IDP_HINT: ebw-connector
+      BFF_PORT: "3000"   # 8080 inside the container is the forwarder to Keycloak
+    ports:
+      - "${PORTAL_PORT:-3000}:3000"
+    volumes:
+      - ./localhost-link.mjs:/opt/community-days/localhost-link.mjs:ro
+    depends_on:
+      iam:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres-data:
+  keycloak-data:
+  keys:

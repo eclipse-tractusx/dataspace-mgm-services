@@ -24,11 +24,12 @@
 #################################################################################
 """Interfaces of the internal services: Portal IAM, database, neighbouring modules, background job.
 The implementations live in managers/ (database, iam, gateways) and services/ (cleanup job)."""
+from .attestation_keys import AttestationKeys
 from .company_profile_gateway import CompanyProfileGateway
 from .database import Database
 from .invitation_cleanup_job import InvitationCleanupJob
 from .portal_iam import PortalIam, iam_error
 from .subscriptions_gateway import SubscriptionsGateway
 
-__all__ = ["CompanyProfileGateway", "Database", "InvitationCleanupJob", "PortalIam",
+__all__ = ["AttestationKeys", "CompanyProfileGateway", "Database", "InvitationCleanupJob", "PortalIam",
            "SubscriptionsGateway", "iam_error"]

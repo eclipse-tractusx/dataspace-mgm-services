@@ -51,6 +51,7 @@ def default_clients() -> list[dict]:
             "jwksUri": f"{config.TEST_TOOLS_URL}/osp/jwks",
             "redirectUris": [f"{config.TEST_TOOLS_URL}/osp/callback"],
             "scopes": ALL_SCOPES,
+            "page": {"theme": "portal", "brand": "OSP 2.0", "tagline": "Demo portal"},
         },
         {
             "clientId": "business-wallet",
@@ -58,13 +59,17 @@ def default_clients() -> list[dict]:
             "jwksUri": f"{config.BUSINESS_WALLET_URL}/jwks",
             "redirectUris": [f"{config.BUSINESS_WALLET_URL}/login/callback"],
             "scopes": ["openid", "profile", "representation"],
+            "page": {"theme": "wallet", "brand": "Business Wallet"},
         },
     ]
 
 
 def all_clients() -> dict[str, dict]:
-    entries = json.loads(config.CLIENTS_FILE.read_text()) if config.CLIENTS_FILE.exists() else default_clients()
-    return {c["clientId"]: c for c in entries}
+    """The clients of `CLIENTS_FILE`, without the file the two of this stack. An entry of the file for one of these
+    two keeps their look (`page`, 6.8) unless it names its own: such files exist with other addresses only."""
+    own = {c["clientId"]: c for c in default_clients()}
+    entries = json.loads(config.CLIENTS_FILE.read_text()) if config.CLIENTS_FILE.exists() else list(own.values())
+    return {c["clientId"]: {"page": own[c["clientId"]]["page"], **c} if c["clientId"] in own else c for c in entries}
 
 
 def get(client_id: str | None) -> dict | None:

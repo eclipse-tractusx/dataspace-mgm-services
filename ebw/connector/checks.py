@@ -53,6 +53,7 @@ class Presented:
     claims: dict
     key_binding: str | None
     status_checked: bool = False
+    company: "Presented | None" = None  # mandate only: the LPID it carries, if that LPID gave the trust (6.5 rule 4)
 
 
 def parse(presentation, credential_type: str) -> Presented:
@@ -162,29 +163,55 @@ def _normalise(value) -> str:
     return unicodedata.normalize("NFC", str(value or "")).strip().casefold()
 
 
-def _mandate_key(mandate: Presented, lpid: Presented | None, client: dict) -> tuple[str | None, object]:
-    """Rule of 6.5 whose key verifies the mandate, and the key."""
+def carried_lpid(mandate: Presented) -> Presented | None:
+    """The LPID a mandate carries in `company_credential` (11.2), with all checks of 6.3 except the key binding:
+    the signature of the mandate replaces it. None if the mandate carries none or it does not pass."""
+    carried = mandate.claims.get(config.COMPANY_CREDENTIAL_CLAIM)
+    if not carried:
+        return None
+    try:
+        item = parse(carried, "LPID")
+        _, key = trust.find_key("LPID", item.issuer_jwt, item.payload.get("iss"))
+        check_times(item)
+        check_status(item, key)
+        check_claims(item, config.COMPANY_CREDENTIAL_REQUIRED)
+    except VerificationError as exc:
+        print(f"LPID inside the mandate not accepted: {exc.code} ({exc})", flush=True)
+        return None
+    return item
+
+
+def _mandate_key(mandate: Presented, lpid: Presented | None, client: dict) -> tuple[str | None, object, Presented | None]:
+    """Rule of 6.5 whose key verifies the mandate, the key, and for rule 4 the LPID from the mandate."""
     try:
         _, key = trust.find_key("MANDATE", mandate.issuer_jwt, mandate.payload.get("iss"))
-        return "trust_list", key
+        return "trust_list", key, None
     except VerificationError:
         pass
-    candidates = []
+    candidates: list[tuple[str, object, Presented | None]] = []
     if lpid is not None and (lpid.payload.get("cnf") or {}).get("jwk"):
-        candidates.append(("company_key", key_from_jwk(lpid.payload["cnf"]["jwk"])))
-    candidates += [("client_key", key) for _, key in clients.client_keys(client)]
-    for rule, key in candidates:
+        candidates.append(("company_key", key_from_jwk(lpid.payload["cnf"]["jwk"]), None))
+    candidates += [("client_key", key, None) for _, key in clients.client_keys(client)]
+    for rule, key, _ in candidates:
         try:
             verify_jws(mandate.issuer_jwt, key)
-            return rule, key
+            return rule, key, None
         except ValueError:
             continue
-    return None, None
+    carried = carried_lpid(mandate)
+    if carried is not None and (carried.payload.get("cnf") or {}).get("jwk"):
+        try:
+            key = key_from_jwk(carried.payload["cnf"]["jwk"])
+            verify_jws(mandate.issuer_jwt, key)
+            return "company_credential", key, carried
+        except (ValueError, KeyError):
+            pass
+    return None, None, None
 
 
 def representation(mandate: Presented, pid: Presented, lpid: Presented | None, client: dict, claim_names: list[str]) -> dict:
     """Result of 6.5. Raises VerificationError if a trusted mandate is expired, revoked or incomplete."""
-    rule, key = _mandate_key(mandate, lpid, client)
+    rule, key, carried = _mandate_key(mandate, lpid, client)
     if rule is None:
         return {"result": "NOT_CONFIRMED", "reasons": ["ISSUER_NOT_TRUSTED"], "issuer": mandate.payload.get("iss")}
     check_times(mandate)
@@ -196,7 +223,9 @@ def representation(mandate: Presented, pid: Presented, lpid: Presented | None, c
     reasons = []
     if any(_normalise(representative.get(k)) != _normalise(pid.claims.get(k)) for k in ("given_name", "family_name", "birthdate")):
         reasons.append("PERSON_MISMATCH")
-    if lpid is not None and represented.get("identifier") not in (lpid.claims.get("ebwoid"), lpid.claims.get("euid")):
+    # The mandate names the company of the LPID: the one of the company step, and the one that gave the trust.
+    if any(represented.get("identifier") not in (item.claims.get("ebwoid"), item.claims.get("euid"))
+           for item in (lpid, carried) if item is not None):  # fmt: skip
         reasons.append("COMPANY_MISMATCH")
     if claims.get("representation_type") not in config.ACCEPTED_REPRESENTATION_TYPES:
         reasons.append("TYPE_NOT_ACCEPTED")
@@ -214,4 +243,5 @@ def representation(mandate: Presented, pid: Presented, lpid: Presented | None, c
     }
     if reasons:
         result["reasons"] = reasons
+    mandate.company = carried
     return {k: v for k, v in result.items() if v is not None}

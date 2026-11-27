@@ -31,16 +31,31 @@ adds the test objects and writes one directory per variant:
     test/import/hackathon/  OSP A and OSP B, persons from testdata/ (FRAMEWORK 7a)
     test/import/test/       one installation for the tests of C2-M5: Erika and Max are bound
 
-Usage:  build-test-realm.py [--jwks-base URL] [--csp-jwks-url URL] [--out DIR]
+With --sign-in it builds one more variant, named after the value. It is the variant hackathon without the
+stand-in TEST-EBW, with the sign-in methods of the value (iam/README.md "Sign-in methods"):
+
+    test/import/wallet/     only the wallet: the Portal IAM redirects to the EBW-Connector (ebw/) at --ebw-connector-url
+    test/import/both/       password or wallet: the sign-in page of the Portal IAM with a form and the button of the
+                            EBW-Connector; the test persons have a password
+    test/import/password/   only the password: the identity provider is disabled, no EBW-Connector is needed
+
+For wallet and both, the clients the EBW-Connector has to know are written to test/import/<value>.ebw-clients.json.
+
+Usage:  uv run python iam/test/build-test-realm.py [--jwks-base URL] [--csp-jwks-url URL] [--out DIR]
+                                                   [--sign-in wallet|both|password] [--ebw-connector-url URL]
 """
 import argparse
 import json
+import sys
 import uuid
 from pathlib import Path
 
 TEST = Path(__file__).resolve().parent
 IAM = TEST.parent
 ROOT = IAM.parent
+sys.path.insert(0, str(ROOT))
+from portal_common import spec  # noqa: E402
+
 IAM_URL = "http://localhost:8080/auth"
 STAND_IN = f"{IAM_URL}/realms/TEST-EBW"
 COMMON = {
@@ -81,7 +96,7 @@ def stand_in_users():
     return users
 
 
-def account(person, stand_ins):
+def account(person, stand_ins, password=None):
     stand_in = stand_ins[person["key"]]
     uid = stand_in_id(person["key"])
     user = {
@@ -95,6 +110,11 @@ def account(person, stand_ins):
     }
     if person.get("companyId"):
         user["attributes"] = {"company_id": [person["companyId"]], "bpn": [person["bpn"]]}
+    if password:
+        # Sign-in with a password at the Portal IAM itself: the name is the key of the person. The link to the
+        # stand-in stays, because `tools.keycloak_admin.reset_realm` recognises the persons by it.
+        user["username"] = person["key"]
+        user["credentials"] = [{"type": "password", "value": password, "temporary": False}]
     return user
 
 
@@ -102,12 +122,13 @@ ONLY_FOR = {"read_wallet_holder_access": "svc-c4-m1", "rotate_subscription_crede
 
 
 def service_accounts(realm, secret):
-    """`svc-<module>` of every folder in modules/ and `svc-test-internal` get every step and query permission
+    """`svc-<module>` of every module of the spec and `svc-test-internal` get every step and query permission
     (C2-M5 14.2), as `tokens.service_token` expects; the permissions in ONLY_FOR only the account named there
     and `svc-test-internal`. `svc-c2-m2` and `svc-c2-m3` keep their rights on the Admin API."""
     names = [r["name"] for r in realm["roles"]["client"]["portal-core"]
              if r["name"].startswith(("execute_steps_", "query_")) or r["name"] in ("read_wallet_holder_access", "rotate_subscription_credentials")]
-    ids = [f"svc-{folder.name.replace('_', '-')}" for folder in sorted((ROOT / "modules").iterdir()) if (folder / "__init__.py").exists()]
+    by_folder_name = sorted(spec.modules(), key=lambda mid: mid.replace("-", "_"))  # order of the former folder names
+    ids = [f"svc-{mid}" for mid in by_folder_name]
     clients = {c["clientId"]: c for c in realm["clients"]}
     users = {u["username"]: u for u in realm["users"]}
     for client_id in [*ids, "svc-test-internal"]:
@@ -197,7 +218,30 @@ def stand_in_realm(installations, stand_ins, env, extras):
     }
 
 
-def build(variant, source, jwks_base, csp_jwks_url, out):
+def connector_client(values: dict[str, str]) -> dict[str, object]:
+    """The Portal IAM of one installation as a client of the EBW-Connector (C5-M1 6.8, entry of its CLIENTS_FILE).
+    `page` gives the page of the EBW-Connector the look of the portal UI, so a person sees where they sign in."""
+    realm = f"{IAM_URL}/realms/{values['IAM_REALM']}"
+    return {
+        "clientId": values["EBW_CONNECTOR_CLIENT_ID"], "name": f"Portal IAM of {values['IAM_REALM']}",
+        "jwksUri": f"{realm}/protocol/openid-connect/certs", "redirectUris": [f"{realm}/broker/ebw-connector/endpoint"],
+        "scopes": ["openid", "profile"],
+        "page": {"theme": "tractusx", "brand": "Eclipse Tractus-X", "tagline": "Dataspace Management"},
+    }
+
+
+def sign_in_methods(realm: dict, sign_in: str) -> None:
+    """Sets the sign-in methods of a realm (variants wallet, both, password). realm-osp.json describes `wallet`: its
+    browser flow redirects to the EBW-Connector at once. The other two use the browser flow of Keycloak, which shows
+    the sign-in page: a form for name and password and, if enabled, the button of the identity provider. The
+    password is typed only on that page: the direct grant stays denied in every variant."""
+    if sign_in in ("both", "password"):
+        realm["browserFlow"] = "browser"
+    if sign_in == "password":
+        realm["identityProviders"][0]["enabled"] = False
+
+
+def build(variant, source, jwks_base, csp_jwks_url, out, connector_url=None, sign_in=None):
     env = read_env()
     stand_ins = stand_in_users()
     objects = json.loads((TEST / source).read_text(encoding="utf-8"))
@@ -213,13 +257,18 @@ def build(variant, source, jwks_base, csp_jwks_url, out):
             "C2_M2_CLIENT_SECRET": env["SERVICE_CLIENT_SECRET"], "C2_M3_CLIENT_SECRET": env["SERVICE_CLIENT_SECRET"],
             "CALLBACK_CLIENT_SECRET_SA_IH_CALLBACK": env["SA_IH_CALLBACK_SECRET"], "CALLBACK_CLIENT_SECRET_SA_DIV_CALLBACK": env["SA_DIV_CALLBACK_SECRET"],
         }
+        if connector_url:
+            values["EBW_CONNECTOR_URL"] = connector_url.rstrip("/")
         realm = json.loads(fill((IAM / "realm-osp.json").read_text(encoding="utf-8"), values))
-        # The stand-in is a Keycloak realm, so its paths differ from those of the EBW-Connector (C2-M5 14.1).
-        realm["identityProviders"][0]["config"].update({
-            "authorizationUrl": f"{STAND_IN}/protocol/openid-connect/auth",
-            "tokenUrl": f"{STAND_IN}/protocol/openid-connect/token",
-            "jwksUrl": f"{STAND_IN}/protocol/openid-connect/certs",
-        })
+        if sign_in:
+            sign_in_methods(realm, sign_in)
+        else:
+            # The stand-in is a Keycloak realm, so its paths differ from those of the EBW-Connector (C2-M5 14.1).
+            realm["identityProviders"][0]["config"].update({
+                "authorizationUrl": f"{STAND_IN}/protocol/openid-connect/auth",
+                "tokenUrl": f"{STAND_IN}/protocol/openid-connect/token",
+                "jwksUrl": f"{STAND_IN}/protocol/openid-connect/certs",
+            })
         service_accounts(realm, env["SERVICE_CLIENT_SECRET"])
         if item.get("technicalUser"):
             technical_user(realm, env["SA_TEST_U1_SECRET"])
@@ -229,10 +278,18 @@ def build(variant, source, jwks_base, csp_jwks_url, out):
             if client["clientId"] == "portal-ui":
                 client["redirectUris"] += ["http://localhost:8081/*", "http://localhost/callback"]
         persons = item.get("persons") or json.loads((ROOT / item["personsFile"]).read_text(encoding="utf-8"))["persons"]
-        realm["users"] += [account(p, stand_ins) for p in persons]
+        password = env["TEST_EBW_PASSWORD"] if sign_in in ("both", "password") else None
+        realm["users"] += [account(p, stand_ins, password) for p in persons]
         (target / f"{item['values']['IAM_REALM']}-realm.json").write_text(json.dumps(realm, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    stand_in = stand_in_realm(objects["installations"], stand_ins, env, objects.get("standInExtras"))
-    (target / "TEST-EBW-realm.json").write_text(json.dumps(stand_in, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    if connector_url:
+        # The file lies beside the variant folder, because Keycloak imports every file in it.
+        clients = [connector_client(item["values"]) for item in objects["installations"]]
+        text = json.dumps(clients, indent=1, ensure_ascii=False) + "\n"
+        (out / f"{variant}.ebw-clients.json").write_text(text, encoding="utf-8")
+    if not sign_in:
+        stand_in = stand_in_realm(objects["installations"], stand_ins, env, objects.get("standInExtras"))
+        text = json.dumps(stand_in, indent=1, ensure_ascii=False) + "\n"
+        (target / "TEST-EBW-realm.json").write_text(text, encoding="utf-8")
     print(variant, sorted(p.name for p in target.glob("*.json")))
 
 
@@ -241,10 +298,23 @@ def main():
     parser.add_argument("--jwks-base", default="http://iam-test-jwks:8000", help="address of the file server with the test JWKS")
     parser.add_argument("--csp-jwks-url", default="http://host.docker.internal:8100/.well-known/jwks.json", help="JWKS of the CSP stand-in, as Keycloak reaches it (variant hackathon)")
     parser.add_argument("--out", default=str(TEST / "import"), help="target directory")
+    parser.add_argument("--sign-in", choices=["wallet", "both", "password"],
+                        help="build one more variant with these sign-in methods, without the stand-in TEST-EBW")
+    parser.add_argument("--ebw-connector-url",
+                        help="address of the EBW-Connector as Keycloak and the browser reach it, for example "
+                             "http://localhost:8077; required for --sign-in wallet and both")
     args = parser.parse_args()
+    sign_in = args.sign_in or ("wallet" if args.ebw_connector_url else None)
+    if sign_in in ("wallet", "both") and not args.ebw_connector_url:
+        parser.error(f"--sign-in {sign_in} needs --ebw-connector-url")
+    if sign_in == "password" and args.ebw_connector_url:
+        parser.error("--sign-in password uses no EBW-Connector: leave out --ebw-connector-url")
     out = Path(args.out)
     build("test", "test-objects.json", args.jwks_base, args.csp_jwks_url, out)
     build("hackathon", "test-objects.hackathon.json", args.jwks_base, args.csp_jwks_url, out)
+    if sign_in:
+        source = "test-objects.hackathon.json"
+        build(sign_in, source, args.jwks_base, args.csp_jwks_url, out, args.ebw_connector_url, sign_in)
 
 
 if __name__ == "__main__":

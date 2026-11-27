@@ -93,8 +93,11 @@ class Issuer:
 
     # Offers
 
-    def create_offer(self, claims_by_config: dict[str, dict], label: str = "") -> tuple[str, str]:
-        """Returns (offer ID, link for the wallet). Every configuration may be fetched with the code."""
+    def create_offer(
+        self, claims_by_config: dict[str, dict], label: str = "", always_visible: dict[str, dict] | None = None
+    ) -> tuple[str, str]:
+        """Returns (offer ID, link for the wallet). Every configuration may be fetched with the code.
+        `always_visible`: per configuration the claims that are not selectively disclosable."""
         code = random_token(24)
         offer_id = random_token(12)
         self.codes[code] = (offer_id, time.time() + LIFETIME)
@@ -105,6 +108,7 @@ class Issuer:
                 "grants": {PRE_AUTH_GRANT: {"pre-authorized_code": code}},
             },
             "claims": claims_by_config,
+            "always_visible": always_visible or {},
             "label": label,
             "expires": time.time() + LIFETIME,
             "redeemed": False,
@@ -245,8 +249,9 @@ class Issuer:
                 return error(400, "invalid_proof", str(exc))
             status = self.status_list.allocate() if self.status_list else None
             credential = sdjwt.issue(
-                claims, definition["vct"], holder_jwk, self.key, self.header, self.base_url, self.validity, status
-            )
+                claims, definition["vct"], holder_jwk, self.key, self.header, self.base_url, self.validity, status,
+                always_visible=entry["always_visible"].get(cid),
+            )  # fmt: skip
             if self.on_issued:
                 self.on_issued(cid, claims, status, entry["label"])
             issued.append({"credential": credential})

@@ -81,6 +81,16 @@ THEMES = {
     " --bar: #fff; --bar-text: #3b0764; --bar-line: #6d28d9; --radius: 6px; }",
     "connector": ":root { --primary: #2e8b57; --primary-dark: #1e6b41; --soft: #e6f2eb; --bg: #f7f8f9; --line: #e4e7eb;"
     " --bar: #374151; --bar-text: #fff; --bar-line: #2e8b57; }",
+    # The look of the Dataspace Management UI in its default, dark mode (its palette: orange #FAA023 on black).
+    "tractusx": ":root { --primary: #faa023; --primary-dark: #faa023; --soft: #232323; --bg: #000; --card: #1e1e1e; --text: #fff;"
+    " --line: rgba(255, 255, 255, .3); --bar: #000; --bar-text: #fff; --bar-line: rgba(255, 255, 255, .1); --radius: 10px; }"
+    " header.bar { border-bottom-width: 1px; } header.bar .logo small { border-left: 1px solid rgba(255, 255, 255, .3); padding-left: .6rem; margin-left: .6rem; }"
+    " a { color: #faa023; } a.button, button { color: #000; font-weight: 600; border-radius: 8px; }"
+    " button.secondary, a.button.secondary { color: #fff; }"
+    " input, textarea, select { background: #1e1e1e; color: #fff; border-color: rgba(255, 255, 255, .3); }"
+    " code, pre { background: #232323; color: #fff; } .muted, summary { color: rgba(255, 255, 255, .7); }"
+    " .steps span { background: #232323; } .steps span.current { color: #000; }"
+    " .ok { color: #afc72d; } .fail { color: #ff8a80; } main img { background: #fff; padding: 8px; border-radius: 10px; }",
 }
 
 
@@ -115,7 +125,7 @@ def page(
 
 
 def qr(uri: str) -> str:
-    data_uri = segno.make(uri, error="m").svg_data_uri(scale=5, border=2)
+    data_uri = segno.make(uri, error="m").svg_data_uri(scale=5, border=2, light="#fff")  # readable on a dark page too
     return f'<p><img src="{data_uri}" alt="QR code"></p>'
 
 

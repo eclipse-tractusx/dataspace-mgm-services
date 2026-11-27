@@ -40,8 +40,10 @@ def issue(
     issuer: str,
     validity: int,
     status: dict | None = None,
+    always_visible: dict | None = None,
 ) -> str:
-    """Every top-level claim becomes its own disclosure; nested objects are disclosed as a whole."""
+    """Every top-level claim becomes its own disclosure; nested objects are disclosed as a whole.
+    Claims in `always_visible` go into the payload itself: a wallet cannot leave them out."""
     disclosures = [
         b64url(json.dumps([b64url(os.urandom(16)), name, value], ensure_ascii=False).encode())
         for name, value in claims.items()
@@ -55,6 +57,7 @@ def issue(
         "cnf": {"jwk": holder_jwk},
         "_sd_alg": "sha-256",
         "_sd": sorted(sha256_b64url(d) for d in disclosures),
+        **(always_visible or {}),
     }
     if status:
         payload["status"] = status
@@ -113,6 +116,12 @@ def present(sd_jwt: str, claim_names: list[str] | None, holder_key, audience: st
         holder_key,
     )
     return without_kb + key_binding
+
+
+def without_key_binding(sd_jwt: str, claim_names: list[str]) -> str:
+    """The SD-JWT with the disclosures of the named claims only and without a KB-JWT, ending with ~."""
+    issuer_jwt, disclosures, _ = split(sd_jwt)
+    return issuer_jwt + "~" + "".join(d + "~" for d in disclosures if disclosure_name(d) in claim_names)
 
 
 def payload_of(sd_jwt: str) -> dict:

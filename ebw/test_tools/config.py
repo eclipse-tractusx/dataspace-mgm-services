@@ -37,6 +37,8 @@ HERE = Path(__file__).parent
 PUBLIC_URL = (os.environ.get("PUBLIC_URL") or "http://localhost:8079").rstrip("/")
 HOST = urlsplit(PUBLIC_URL).hostname
 CONNECTOR_URL = (os.environ.get("CONNECTOR_URL") or "http://localhost:8077").rstrip("/")
+# Address of the Business Wallet of the stack, for the button that opens the LPID offer there
+BUSINESS_WALLET_URL = (os.environ.get("BUSINESS_WALLET_URL") or "http://localhost:8078").rstrip("/")
 KEY_DIR = Path(os.environ.get("KEY_DIR") or HERE / ".keys")
 DATA_DIR = Path(os.environ.get("DATA_DIR") or HERE / "data")
 

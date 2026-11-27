@@ -113,7 +113,7 @@ def authorize(request: Request):
         return redirect_to_client(redirect_uri, {"error": "invalid_request", "error_description": "response_type code, nonce and PKCE S256 are required", "state": state})
     allowed = set(client.get("scopes", clients.ALL_SCOPES))
     if "openid" not in scopes or not set(scopes) <= allowed or (
-        "attestation" in scopes and not {"profile", "representation", "company"} <= set(scopes)
+        "attestation" in scopes and not {"profile", "representation"} <= set(scopes)
     ):
         return redirect_to_client(redirect_uri, {"error": "invalid_scope", "error_description": "scope not allowed", "state": state})
     browser_value = request.cookies.get(COOKIE) or random_token(24)

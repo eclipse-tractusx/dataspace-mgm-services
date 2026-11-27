@@ -224,7 +224,15 @@ def run() -> None:
     erika = Wallet()
     erika.receive(tools_offer({"pid": {}, "mandate": {}}, "Erika"))
     admin = Browser()
-    response = admin.go(f"{URL['business_wallet']}/receive", method="POST", data={"offer": tools_offer({"lpid": {}}, "LPID")})
+    # The test tools open the LPID offer in the Business Wallet, which fills it into the form (no copy and paste)
+    tools_page = html.unescape(httpx.get(URL["test_tools"] + "/").text)
+    check("Test tools link the LPID offer to the Business Wallet", f"{URL['business_wallet']}/?offer=openid-credential-offer" in tools_page)
+    link = tools_offer({"lpid": {}}, "LPID")
+    form = httpx.get(f"{URL['business_wallet']}/?{urlencode({'offer': link})}").text
+    check("Business Wallet fills in the offer from its address", f">{html.escape(link)}</textarea>" in form)
+    other = httpx.get(f"{URL['business_wallet']}/?{urlencode({'offer': 'https://evil.example/x'})}").text
+    check("Business Wallet ignores an address that is no credential offer", "evil.example" not in other)
+    response = admin.go(f"{URL['business_wallet']}/receive", method="POST", data={"offer": link})
     check("Business Wallet holds the LPID", httpx.get(f"{URL['business_wallet']}/api/state").json()["lpid"] is not None)
 
     # 2, 3 Sign-in with the register mandate
@@ -270,6 +278,16 @@ def run() -> None:
         data={"given_name": "Max", "family_name": "Beispiel", "birthdate": "1990-05-05", "role": "Purchasing", "valid_until": "2027-06-30"},
     )
     link = html.unescape(re.search(r'href="(openid-credential-offer://[^"]+)"', response.text).group(1))
+    # A year typed with two digits arrives as the year 30: such a power of attorney is not issued.
+    before = len(httpx.get(f"{URL['business_wallet']}/api/state").json()["mandates"])
+    refused = [
+        admin.go(f"{URL['business_wallet']}/mandates", method="POST",
+                 data={"given_name": "Max", "family_name": "Beispiel", "birthdate": born, "role": "Purchasing", "valid_until": until})
+        for born, until in (("1990-05-05", "0030-12-31"), ("0090-05-05", "2027-06-30"))
+    ]  # fmt: skip
+    check("6 Power of attorney with a date that cannot be right is not issued",
+          all("Date not possible" in r.text and "openid-credential-offer" not in r.text for r in refused)
+          and len(httpx.get(f"{URL['business_wallet']}/api/state").json()["mandates"]) == before, refused[0].text[-300:])  # fmt: skip
     max_wallet = Wallet()
     max_wallet.receive(tools_offer({"pid": {"given_name": "Max", "family_name": "Beispiel", "birthdate": "1990-05-05"}}, "Max"))
     max_wallet.receive(link)
@@ -280,10 +298,69 @@ def run() -> None:
     check("6 Onboarding by an employee: CONFIRMED through company_key",
           claims.get("representation_result") == "CONFIRMED" and claims.get("representation_trust") == "company_key",
           json.dumps(claims))  # fmt: skip
+    # 16 The power of attorney carries the LPID of the company (6.5 rule 4)
+    real_mandate = next(c for c in max_wallet.credentials if sdjwt.payload_of(c).get("vct") == "urn:tx:test:mandate:1")
+    carried = sdjwt.payload_of(real_mandate).get("company_credential", "")
+    check("16 Power of attorney carries the LPID: always visible, without key binding and address",
+          carried.endswith("~") and "address" not in sdjwt.resolve(sdjwt.payload_of(carried), sdjwt.split(carried)[1]), carried[:80])  # fmt: skip
     claims, _ = oidc_flow(osp, Browser(), signin, max_wallet)
-    check("6 Sign-in at the OSP: NOT_CONFIRMED, ISSUER_NOT_TRUSTED, no data of the power of attorney",
-          claims.get("representation_reasons") == ["ISSUER_NOT_TRUSTED"] and "representation_type" not in claims,
+    check("16 Sign-in at the OSP: CONFIRMED through company_credential, no company claims",
+          claims.get("representation_result") == "CONFIRMED" and claims.get("representation_trust") == "company_credential"
+          and claims.get("representation_company_id") == "EBWOID-DE-0000000001" and "company_ebwoid" not in claims,
           json.dumps(claims))  # fmt: skip
+    membership = "openid profile representation attestation"
+    claims, tokens = oidc_flow(osp, Browser(), membership, max_wallet)
+    _, payload = osp.verify_signed(tokens.get("ebw_attestation", ""))
+    check("16 Attestation without the company step: purpose representation, company from the carried LPID",
+          payload.get("purpose") == "representation" and payload.get("sub") == "EBWOID-DE-0000000001"
+          and payload["representation"].get("confirmed") is True and payload["representation"].get("trust") == "company_credential"
+          and payload["representation"].get("company_id") == "EBWOID-DE-0000000001"
+          and payload.get("company", {}).get("ebwoid") == "EBWOID-DE-0000000001" and payload["person"]["given_name"] == "Max"
+          and [(e["type"], e["wallet"], e.get("carried_in")) for e in payload["evidence"]]
+          == [("PID", "EUDI_WALLET", None), ("MANDATE", "EUDI_WALLET", None), ("LPID", "EUDI_WALLET", "MANDATE")],
+          json.dumps(payload))  # fmt: skip
+    _, tokens = oidc_flow(osp, Browser(), membership, erika)
+    _, payload = osp.verify_signed(tokens.get("ebw_attestation", ""))
+    check("16 Attestation without the company step, register mandate: trust_list, no company block",
+          payload.get("purpose") == "representation" and payload["representation"].get("trust") == "trust_list"
+          and payload.get("sub") == payload["representation"].get("company_id") and "company" not in payload,
+          json.dumps(payload))  # fmt: skip
+    response = httpx.get(osp.start("openid profile attestation")[0])
+    check("16 attestation without representation -> invalid_scope", "error=invalid_scope" in response.headers.get("location", ""))
+
+    def forged(key, always_visible: dict | None, identifier: str = "EBWOID-DE-0000000001") -> Wallet:
+        """Max with his PID and a power of attorney that this test signs itself."""
+        wallet = Wallet()
+        wallet.credentials.append(next(c for c in max_wallet.credentials if c is not real_mandate))
+        wallet.key = max_wallet.key
+        mandate = {
+            "representative": {"given_name": "Max", "family_name": "Beispiel", "birthdate": "1990-05-05"},
+            "represented": {"identifier": identifier, "legal_name": "Some GmbH"},
+            "representation_type": "power_of_attorney", "role": "Purchasing", "valid_until": "2027-06-30",
+        }  # fmt: skip
+        wallet.credentials.append(
+            sdjwt.issue(mandate, "urn:tx:test:mandate:1", public_jwk(wallet.key), key, {}, URL["business_wallet"], 3600,
+                        always_visible=always_visible)  # fmt: skip
+        )
+        return wallet
+
+    claims, tokens = oidc_flow(osp, Browser(), membership, forged(bw_key, None))
+    _, payload = osp.verify_signed(tokens.get("ebw_attestation", ""))
+    check("16 Power of attorney without the LPID: ISSUER_NOT_TRUSTED, attestation names no company",
+          claims.get("representation_reasons") == ["ISSUER_NOT_TRUSTED"] and "representation_type" not in claims
+          and payload["representation"].get("confirmed") is False and "company" not in payload and "sub" not in payload,
+          json.dumps([claims, payload]))  # fmt: skip
+    claims, _ = oidc_flow(osp, Browser(), signin, forged(bw_key, {"company_credential": carried}))
+    check("16 Power of attorney of this test with the LPID: CONFIRMED", claims.get("representation_result") == "CONFIRMED", json.dumps(claims))
+    claims, _ = oidc_flow(osp, Browser(), signin, forged(ec.generate_private_key(ec.SECP256R1()), {"company_credential": carried}))
+    check("16 LPID copied into a power of attorney signed with another key: ISSUER_NOT_TRUSTED",
+          claims.get("representation_reasons") == ["ISSUER_NOT_TRUSTED"], json.dumps(claims))
+    claims, _ = oidc_flow(osp, Browser(), signin, forged(bw_key, {"company_credential": carried}, "EBWOID-DE-0000000002"))
+    check("16 Power of attorney names another company than its LPID: COMPANY_MISMATCH",
+          "COMPANY_MISMATCH" in claims.get("representation_reasons", []), json.dumps(claims))
+    claims, _ = oidc_flow(osp, Browser(), signin, forged(bw_key, {"company_credential": carried[:-1] + "x~"}))
+    check("16 LPID inside the power of attorney damaged: ISSUER_NOT_TRUSTED",
+          claims.get("representation_reasons") == ["ISSUER_NOT_TRUSTED"], json.dumps(claims))
 
     # 7 Mismatches
     other = Wallet()
@@ -399,6 +476,47 @@ def run() -> None:
     issuer.offers[offer_id]["expires"] = time.time() - 1
     check("Offer after its time: expired", issuer.offer_status(offer_id)["status"] == "EXPIRED")
     check("Test tools page tracks all offers", httpx.get(URL["test_tools"] + "/").text.count("data-offer=") == 4)
+
+    # 16 The LPID of the company is revoked: the powers of attorney that carry it lose their trust
+    issued = json.loads((TMP / "test_tools" / "data" / "issued.json").read_text())
+    lpid_index = next(e["index"] for e in issued if e["type"] == "LPID")
+    httpx.post(f"{URL['test_tools']}/api/revoke/{lpid_index}")
+    claims, _ = oidc_flow(osp, Browser(), signin, forged(bw_key, {"company_credential": carried}))
+    check("16 LPID revoked: the power of attorney that carries it is ISSUER_NOT_TRUSTED",
+          claims.get("representation_reasons") == ["ISSUER_NOT_TRUSTED"], json.dumps(claims))
+
+    # 6.8 The transaction page takes the look of the client that asked
+    def asked_by(client: OidcClient, browser: Browser | None = None) -> tuple[str, str]:
+        response = (browser or Browser()).go(client.start(signin)[0])
+        return response.text, str(response.request.url)
+
+    osp_page, osp_tx = asked_by(osp)
+    bw_page, _ = asked_by(bw_client)
+    check("17 Page in the look of the client: demo portal and Business Wallet, each naming the EBW-Connector",
+          ">OSP 2.0<small>Demo portal</small></a>" in osp_page and "--bar-line: #6d28d9" in osp_page and ">Business Wallet</a>" in bw_page
+          and "--bar: #16213e" in bw_page and all('id="checked-by"' in p and "EBW-Connector checks" in p for p in (osp_page, bw_page)),
+          osp_page[-400:])  # fmt: skip
+    check("17 Page opened without the cookie stays neutral", ">EBW-Connector<small>" in Browser().go(osp_tx).text and "OSP 2.0" not in Browser().go(osp_tx).text)
+    # A clients file: the two clients of the stack without `page` keep their look, others get theirs or the neutral one.
+    listed = [
+        {"clientId": "demo-osp", "name": "Listed demo portal", "jwksUri": f"{URL['test_tools']}/osp/jwks", "redirectUris": [osp.redirect_uri]},
+        {"clientId": "business-wallet", "name": "Business Wallet", "jwksUri": f"{URL['business_wallet']}/jwks", "redirectUris": [bw_client.redirect_uri],
+         "page": {"theme": "tractusx", "brand": "Eclipse Tractus-X", "tagline": "Dataspace <Management>"}},
+        {"clientId": "plain", "name": "Plain client", "jwksUri": f"{URL['test_tools']}/osp/jwks", "redirectUris": [osp.redirect_uri]},
+        {"clientId": "odd", "name": "Odd client", "jwksUri": f"{URL['test_tools']}/osp/jwks", "redirectUris": [osp.redirect_uri], "page": {"theme": "nope", "brand": "Odd"}},
+    ]  # fmt: skip
+    (TMP / "no-clients.json").write_text(json.dumps(listed))
+    try:
+        named = {name: asked_by(OidcClient(URL["connector"], name, osp.redirect_uri, osp_key))[0] for name in ("plain", "odd")}
+        listed_osp, own_look = asked_by(osp)[0], asked_by(bw_client)[0]
+    finally:
+        (TMP / "no-clients.json").unlink()
+    check("17 Clients file: the clients of the stack keep their look, a client sets its own, brand and tagline escaped",
+          ">OSP 2.0<small>" in listed_osp and "Listed demo portal wants to check" in listed_osp
+          and ">Eclipse Tractus-X<small>Dataspace &lt;Management&gt;</small></a>" in own_look and "--primary: #faa023" in own_look,
+          own_look[:600])  # fmt: skip
+    check("17 Client without a look, or with a theme the stack does not have: the look of the EBW-Connector",
+          all(">EBW-Connector<small>" in p and 'id="checked-by"' not in p and "--bar: #374151" in p for p in named.values()), named["odd"][:600])
 
     # 15 Audit log without personal data
     audit = (TMP / "audit.log").read_text()

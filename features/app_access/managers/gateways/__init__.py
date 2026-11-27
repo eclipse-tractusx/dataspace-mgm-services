@@ -23,9 +23,10 @@
 #  Assisted-By: GitHub Copilot (claude-opus-5-5)
 #################################################################################
 """Neighbours of App Access (C3-M1 company profiles, C10-M1 subscriptions) through `portal_common.neighbours`, with
-the built-in stand-ins of README 11.2 read from `managers/data/`."""
+the built-in stand-ins of README 11.2 read from `managers/data/`, and the keys of the EBW-Connector (C5-M1)."""
+from .attestation_keys_impl import AttestationKeysImpl
 from .company_profile_gateway_impl import CompanyProfileGatewayImpl
 from .neighbour_gateway import NeighbourGateway
 from .subscriptions_gateway_impl import SubscriptionsGatewayImpl
 
-__all__ = ["CompanyProfileGatewayImpl", "NeighbourGateway", "SubscriptionsGatewayImpl"]
+__all__ = ["AttestationKeysImpl", "CompanyProfileGatewayImpl", "NeighbourGateway", "SubscriptionsGatewayImpl"]

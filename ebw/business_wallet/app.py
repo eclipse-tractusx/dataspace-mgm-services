@@ -25,6 +25,7 @@
 """Business Wallet in the browser: holds the company's LPID, presents it, issues mandates to employees.
 People sign in with their EUDI Wallet through the EBW-Connector (C5-M1)."""
 
+from datetime import UTC, date, datetime
 from html import escape
 from urllib.parse import urlencode, urlsplit
 
@@ -33,7 +34,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from business_wallet import config, store
-from common import holder
+from common import holder, sdjwt
 from common.issuer import Issuer
 from common.jose import random_token, signing_jwk, x5c
 from common.oidc_client import OidcClient, OidcError
@@ -41,6 +42,9 @@ from common.statuslist import StatusList
 from common.web import OFFER_SCRIPT, CookieSession, offer_box, page, qr, read_form
 
 ROLE = {"legal_representative": "Administrator"}
+# Limits of the dates of a new power of attorney: what a person can mean, not what a date field accepts.
+EARLIEST_BIRTHDATE = "1900-01-01"
+LATEST_DATE = "2099-12-31"
 MANDATE_DEFINITION = {
     "mandate": {
         "vct": config.MANDATE_VCT,
@@ -149,10 +153,11 @@ def home(request: Request):
     if "request_uri" in request.query_params:  # wallet address entered without /present
         return RedirectResponse(f"/present?{request.url.query}", status_code=303)
     lpid = store.lpid()
+    offer = offer_from(request)
     if lpid is None:
         body = (
             '<div class="hero"><h1>Set up the Business Wallet</h1><p>This Business Wallet does not hold a '
-            "company credential yet. First fetch the LPID from the register.</p></div>" + receive_form()
+            "company credential yet. First fetch the LPID from the register.</p></div>" + receive_form(offer=offer)
         )
         return bw_page("Set up the Business Wallet", body, request, show_title=False)
     current = user(request)
@@ -179,17 +184,24 @@ def home(request: Request):
         + paste_form()
         + "</div>"
         + address_box()
-        + (receive_form("Fetch a new company credential") + reset_form() if admin else "")
+        + (receive_form("Fetch a new company credential", offer) + reset_form() if admin else "")
         + COPY
     )
     return bw_page("Business Wallet", body, request, show_title=False)
 
 
-def receive_form(title: str = "Fetch the company credential (LPID)") -> str:
+def offer_from(request: Request) -> str:
+    """The link of an offer that the test tools pass in the address (`/?offer=…`), to fill in the form.
+    Only fills the field: fetching still needs a click on Fetch."""
+    offer = request.query_params.get("offer", "")
+    return offer if offer.startswith("openid-credential-offer://") and len(offer) <= 4096 else ""
+
+
+def receive_form(title: str = "Fetch the company credential (LPID)", offer: str = "") -> str:
     return (
         f'<div class="box"><h2>{escape(title)}</h2><form method="post" action="/receive">'
         '<label for="offer">Link of the offer from the register (openid-credential-offer://…)</label>'
-        '<textarea id="offer" name="offer" rows="3" required></textarea>'
+        f'<textarea id="offer" name="offer" rows="3" required>{escape(offer)}</textarea>'
         "<button>Fetch</button></form></div>"
     )
 
@@ -204,15 +216,16 @@ def paste_form() -> str:
 
 
 def issue_form() -> str:
+    today = today_utc().isoformat()
     return (
         '<div class="box"><h2>Issue a power of attorney</h2>'
         "<p>It goes into the EUDI Wallet of the person as a mandate.</p>"
         '<form method="post" action="/mandates">'
         '<label for="given_name">Given name</label><input id="given_name" name="given_name" required>'
         '<label for="family_name">Family name</label><input id="family_name" name="family_name" required>'
-        '<label for="birthdate">Date of birth</label><input id="birthdate" name="birthdate" type="date" required>'
+        f'<label for="birthdate">Date of birth</label><input id="birthdate" name="birthdate" type="date" min="{EARLIEST_BIRTHDATE}" max="{today}" required>'
         '<label for="role">Role</label><input id="role" name="role" placeholder="for example Purchasing" required>'
-        '<label for="valid_until">Valid until</label><input id="valid_until" name="valid_until" type="date" required>'
+        f'<label for="valid_until">Valid until</label><input id="valid_until" name="valid_until" type="date" min="{today}" max="{LATEST_DATE}" required>'
         "<button>Issue power of attorney</button></form></div>"
     )
 
@@ -409,6 +422,35 @@ def mandate_claims(mandate: dict) -> dict:
     }
 
 
+def company_credential() -> dict:
+    """The LPID that goes into a mandate (C5-M1 11.2): without key binding, with the claims a verifier needs to
+    name the company. With it a verifier can trust the mandate without asking this Business Wallet."""
+    lpid = store.lpid_credential()
+    if lpid is None:
+        return {}
+    return {config.COMPANY_CREDENTIAL_CLAIM: sdjwt.without_key_binding(lpid, config.COMPANY_CREDENTIAL_DISCLOSED)}
+
+
+def today_utc() -> date:
+    """The day the EBW-Connector compares `valid_until` with (C5-M1 6.5)."""
+    return datetime.now(UTC).date()
+
+
+def date_problem(birthdate: str, valid_until: str) -> str:
+    """Why the dates of a new power of attorney cannot be right, or "". A date field accepts a year typed with two
+    digits as the year 30; such a power of attorney would be issued and then count as expired everywhere."""
+    try:
+        born, until = date.fromisoformat(birthdate), date.fromisoformat(valid_until)
+    except ValueError:
+        return "Please enter the dates as a day, a month and a year with four digits."
+    today = today_utc()
+    if until < today or until.isoformat() > LATEST_DATE:
+        return f'"Valid until" is {valid_until}. It must be between today and {LATEST_DATE}; please check the year.'
+    if born > today or born.isoformat() < EARLIEST_BIRTHDATE:
+        return f'"Date of birth" is {birthdate}. Please check the year.'
+    return ""
+
+
 @app.post("/mandates")
 async def create_mandate(request: Request):
     if user(request).get("role") != "Administrator":
@@ -417,6 +459,9 @@ async def create_mandate(request: Request):
     mandate = {"id": random_token(8), **{k: form.get(k, "").strip() for k in ("given_name", "family_name", "birthdate", "role", "valid_until")}}
     if not all(mandate.values()):
         return message("Incomplete details", "Please fill in all fields.")
+    problem = date_problem(mandate["birthdate"], mandate["valid_until"])
+    if problem:
+        return message("Date not possible", problem)
     store.add_mandate(mandate)
     return RedirectResponse(f"/mandates/{mandate['id']}", status_code=303)
 
@@ -428,7 +473,7 @@ def show_mandate(mandate_id: str, request: Request):
         return message("Not found", "Unknown power of attorney or no permission.")
     if mandate["state"] != "OFFERED":
         return RedirectResponse("/", status_code=303)
-    offer_id, link = issuer.create_offer({"mandate": mandate_claims(mandate)}, mandate_id)
+    offer_id, link = issuer.create_offer({"mandate": mandate_claims(mandate)}, mandate_id, {"mandate": company_credential()})
     offer_links[mandate_id] = link
     body = (
         f"<div class=\"box\"><p>Power of attorney for <b>{escape(mandate['given_name'])} {escape(mandate['family_name'])}</b> "

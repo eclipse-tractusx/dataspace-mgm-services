@@ -22,7 +22,8 @@
 #  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
 #  Assisted-By: GitHub Copilot
 #################################################################################
-"""Acceptance of an invitation by the invited person (README 7.10), scope `own`."""
+"""Acceptance of an invitation by the invited person (README 7.10), scope `own`: with the code, or with a
+verification attestation of the EBW-Connector about a mandate of the company (6.8a)."""
 from __future__ import annotations
 
 from fastapi import Body
@@ -36,7 +37,7 @@ controller = Controller("App Access: Invitations")
 
 
 @controller.post("/accept", operation_id="acceptInvitation", response_model=AcceptInvitationResult,
-                 summary="Accept an invitation with the code")
+                 summary="Accept an invitation with the code or with a mandate")
 @translated
 def accept_invitation(body: dict = Body(...), claims: dict = Permission) -> AcceptInvitationResult:
     # Scope `own`: the service acts only on the account of `sub` in the claims (README 7.10).

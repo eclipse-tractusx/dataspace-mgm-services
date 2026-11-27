@@ -32,6 +32,10 @@ Start order: settings -> test tools (Portal IAM, EBW-Connector, provider system)
 With `IAM_URL` the Portal IAM is that Keycloak (`iam/`), otherwise the in-memory IAM of the scaffold's
 own tests. `TEST_TOOLS=false` leaves all test tools out (then `IAM_URL` and `EBW_CONNECTOR_URL` point
 to real systems), and the realm is never reset.
+
+Data: with the test tools every start begins with fresh state (`reset_all`), as tests and the demo expect.
+Without them (`TEST_TOOLS=false`) the installation keeps its data over a restart, and `POST /scaffold/reset`
+is not served. `RESET_ON_START=true|false` overrides the start behaviour either way.
 """
 from __future__ import annotations
 
@@ -64,7 +68,16 @@ def _defaults() -> None:
                 os.environ.setdefault(k, str(v).replace("{BASE_URL}", base))
 
 
-def reset_all(entries, *, reset_modules: bool = True) -> None:
+def _test_tools() -> bool:
+    return os.environ.get("TEST_TOOLS", "true") == "true"
+
+
+def _reset_on_start() -> bool:
+    """Fresh state at every start with the test tools; an operated installation keeps its data."""
+    return os.environ.get("RESET_ON_START", "true" if _test_tools() else "false") == "true"
+
+
+def reset_all(entries) -> None:
     """Fresh state in every module and test tool (IAM first, C11/C12 last)."""
     from tools import ebw_signer, provider_double, test_iam
     events.RELAY.reset()
@@ -119,7 +132,8 @@ def create_app(features: Iterable[str] | None = None) -> FastAPI:
             events.subscribe(e.id, e.module.on_event)
     include_controllers(app)   # APIs of the installation outside the modules, /api/v1/<category>/...
     app.state.entries = entries
-    reset_all(entries, reset_modules=False)
+    if _reset_on_start():
+        reset_all(entries)
 
     @app.get("/scaffold/modules", tags=["Scaffold"])
     def modules():
@@ -134,10 +148,11 @@ def create_app(features: Iterable[str] | None = None) -> FastAPI:
         return {"events": [x for x in events.RELAY.log if not want or x["type"] == want],
                 "failures": events.RELAY.failures}
 
-    @app.post("/scaffold/reset", tags=["Scaffold"])
-    def reset():
-        reset_all(entries)
-        return {"reset": True}
+    if _test_tools():   # empties the whole installation without a sign-in: a test tool, never in operation
+        @app.post("/scaffold/reset", tags=["Scaffold"])
+        def reset():
+            reset_all(entries)
+            return {"reset": True}
 
     @app.get("/health", tags=["Scaffold"])
     def health():

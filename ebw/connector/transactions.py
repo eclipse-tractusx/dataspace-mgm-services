@@ -345,23 +345,32 @@ def subject(tx: Transaction, pid_claims: dict) -> str:
 
 
 def attestation(tx: Transaction, verification_id: str, representation: dict | None) -> str:
-    """Verification attestation (section 9)."""
-    pid, lpid, mandate = (tx.presented[k] for k in ("pid", "lpid", "mandate"))
-    company = {k: lpid.claims[k] for k in ("legal_name", "ebwoid", "euid", "country") if k in lpid.claims}
-    if isinstance(lpid.claims.get("address"), dict):
-        company["address"] = lpid.claims["address"]
+    """Verification attestation (section 9). With the company step its purpose is `onboarding` and the company comes
+    from the LPID of the Business Wallet. Without it the purpose is `representation`: the company is the one the
+    mandate names, with the data of the LPID inside the mandate if that LPID gave the trust (6.5 rule 4)."""
+    pid, lpid, mandate = tx.presented["pid"], tx.presented.get("lpid"), tx.presented["mandate"]
+    onboarding = lpid is not None
+    source = lpid if onboarding else mandate.company
+    company = {}
+    if source is not None:
+        company = {k: source.claims[k] for k in ("legal_name", "ebwoid", "euid", "country") if k in source.claims}
+        if isinstance(source.claims.get("address"), dict):
+            company["address"] = source.claims["address"]
     represented = {"confirmed": representation["result"] == "CONFIRMED"}
-    represented.update({k: v for k, v in representation.items() if k not in ("company_id", "company_name")})
+    represented.update({k: v for k, v in representation.items() if not onboarding or k not in ("company_id", "company_name")})
+    evidence = [(pid, "EUDI_WALLET", False), (mandate, "EUDI_WALLET", False)]
+    if source is not None:
+        evidence.append((source, "BUSINESS_WALLET" if onboarding else "EUDI_WALLET", not onboarding))
     now = int(time.time())
     payload = {
         "iss": config.PUBLIC_URL,
-        "sub": company.get("ebwoid"),
+        "sub": company.get("ebwoid") if onboarding else representation.get("company_id"),
         "aud": config.ATTESTATION_AUDIENCE,
         "iat": now,
         "exp": now + config.ATTESTATION_TTL_HOURS * 3600,
         "jti": verification_id,
         "attestation_version": "0.2",
-        "purpose": "onboarding",
+        "purpose": "onboarding" if onboarding else "representation",
         "verified_at": tx.verified_at,
         "client_id": tx.client["clientId"],
         "person": {k: pid.claims[k] for k in ("given_name", "family_name")},
@@ -372,12 +381,15 @@ def attestation(tx: Transaction, verification_id: str, representation: dict | No
                 "type": item.credential_type,
                 "vct": item.payload.get("vct"),
                 "issuer": item.payload.get("iss"),
-                "wallet": "BUSINESS_WALLET" if cid == "lpid" else "EUDI_WALLET",
+                "wallet": wallet,
+                **({"carried_in": "MANDATE"} if carried else {}),
                 "status_checked": item.status_checked,
             }
-            for cid, item in ((k, tx.presented[k]) for k in ("pid", "mandate", "lpid"))
+            for item, wallet, carried in evidence
         ],
     }
+    # Missing values are left out, never null (9.1): no `sub` and no `company` for a mandate that is not trusted.
+    payload = {k: v for k, v in payload.items() if v not in (None, {})}
     return sign_jws({"typ": "ebw-attestation+jwt", "kid": config.KID}, payload, config.SIGNING_KEY)
 
 

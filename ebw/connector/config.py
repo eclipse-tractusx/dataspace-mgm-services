@@ -79,6 +79,9 @@ VCT = {
     "LPID": env("LPID_VCT", "urn:tx:test:lpid:1"),
     "MANDATE": env("MANDATE_VCT", "urn:tx:test:mandate:1"),
 }
+# The LPID inside a mandate (6.5 rule 4, 11.2): name of the claim and the LPID claims it must disclose.
+COMPANY_CREDENTIAL_CLAIM = "company_credential"
+COMPANY_CREDENTIAL_REQUIRED = ["legal_name", "ebwoid", "country"]
 ACCEPTED_REPRESENTATION_TYPES = [
     t.strip() for t in env("ACCEPTED_REPRESENTATION_TYPES", "legal_representative,power_of_attorney").split(",") if t.strip()
 ]

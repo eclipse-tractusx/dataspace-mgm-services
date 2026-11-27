@@ -1,8 +1,9 @@
 [
   { "clientId": "osp-a-ui", "name": "OSP A portal UI",
-    "jwksUri": "https://ui.osp-a.example.org/jwks",
-    "redirectUris": ["https://ui.osp-a.example.org/callback"],
-    "scopes": ["openid", "profile", "representation", "company", "attestation"] },
+    "jwksUri": "https://ui.osp-a.example.org/ebw/jwks",
+    "redirectUris": ["https://ui.osp-a.example.org/ebw/callback"],
+    "scopes": ["openid", "profile", "representation", "company", "attestation"],
+    "page": { "theme": "tractusx", "brand": "Eclipse Tractus-X", "tagline": "Dataspace Management" } },
   { "clientId": "demo-osp", "name": "Demo-OSP (test data of single modules, C5-M1 14.2)",
     "jwksUri": "https://osp.example.org/jwks",
     "redirectUris": ["https://osp.example.org/callback"],

@@ -32,6 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from portal_common import spec  # noqa: E402
 from tools import keycloak_login as login  # noqa: E402
 from tools.keycloak_admin import KeycloakAdmin, reset_tokens  # noqa: E402
 
@@ -62,14 +63,13 @@ for realm, file in (("CX-Central", "persons-osp-a.json"), ("CX-Central-B", "pers
         check(ok, f"{realm} {person['key']}: sub, issuer, name, binding, roles")
     status, tokens = login.client_token("sa-div-callback", realm)
     check(status == 200 and claims(tokens["access_token"])["resource_access"]["portal-core"]["roles"] == ["submit_wallet_callback"], f"{realm} sa-div-callback: exactly one permission")
-    for folder in sorted((ROOT / "modules").iterdir()):
-        if (folder / "__init__.py").exists():
-            client = f"svc-{folder.name.replace('_', '-')}"
-            status, tokens = login.client_token(client, realm)
-            names = set(claims(tokens["access_token"]).get("resource_access", {}).get("portal-core", {}).get("roles", [])) if status == 200 else set()
-            check({"query_c3_m1", "execute_steps_c10_m1", "query_c12_m1"} <= names, f"{realm} {client}: steps and queries")
-            only = {"read_wallet_holder_access": "svc-c4-m1", "rotate_subscription_credentials": "svc-c10-m1"}  # C2-M5 6.2
-            check(all((p in names) == (owner == client) for p, owner in only.items()), f"{realm} {client}: holder access and rotation only as in C2-M5 6.2")
+    for mid in sorted(spec.modules()):
+        client = f"svc-{mid}"
+        status, tokens = login.client_token(client, realm)
+        names = set(claims(tokens["access_token"]).get("resource_access", {}).get("portal-core", {}).get("roles", [])) if status == 200 else set()
+        check({"query_c3_m1", "execute_steps_c10_m1", "query_c12_m1"} <= names, f"{realm} {client}: steps and queries")
+        only = {"read_wallet_holder_access": "svc-c4-m1", "rotate_subscription_credentials": "svc-c10-m1"}  # C2-M5 6.2
+        check(all((p in names) == (owner == client) for p, owner in only.items()), f"{realm} {client}: holder access and rotation only as in C2-M5 6.2")
     os.environ.update(IAM_URL=login.iam_url(), IAM_REALM=realm)
     reset_tokens()
     bound = [p for p in persons if p.get("companyId")]

@@ -66,3 +66,9 @@ context-ai.md
 
 # Team 3 working plan - TEAM3-PLAN.md line 28: "lives outside the repo on purpose ... do not commit it"
 TEAM3-PLAN.md
+
+# Realm files of the variants of --sign-in: built on demand, they contain the address of one EBW-Connector (iam/README.md)
+iam/test/import/wallet/
+iam/test/import/both/
+iam/test/import/password/
+iam/test/import/*.ebw-clients.json

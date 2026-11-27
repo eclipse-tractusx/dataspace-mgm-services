@@ -52,13 +52,21 @@ def add_credential(credential: str) -> None:
     save(state)
 
 
-def lpid() -> dict | None:
-    """Claims of the most recent LPID, or None."""
+def lpid_credential() -> str | None:
+    """The most recent LPID as received, or None."""
     for credential in reversed(credentials()):
         if sdjwt.payload_of(credential).get("vct") == config.LPID_VCT:
-            _, disclosures, _ = sdjwt.split(credential)
-            return sdjwt.resolve(sdjwt.payload_of(credential), disclosures)
+            return credential
     return None
+
+
+def lpid() -> dict | None:
+    """Claims of the most recent LPID, or None."""
+    credential = lpid_credential()
+    if credential is None:
+        return None
+    _, disclosures, _ = sdjwt.split(credential)
+    return sdjwt.resolve(sdjwt.payload_of(credential), disclosures)
 
 
 def mandates() -> list[dict]:

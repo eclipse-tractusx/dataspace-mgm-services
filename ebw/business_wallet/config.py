@@ -56,3 +56,6 @@ SESSION_SECRET = _session_key.read_bytes()
 LPID_VCT = os.environ.get("LPID_VCT") or "urn:tx:test:lpid:1"
 MANDATE_VCT = os.environ.get("MANDATE_VCT") or "urn:tx:test:mandate:1"
 MANDATE_VALIDITY_SECONDS = 365 * 24 * 3600
+# The LPID inside a mandate (C5-M1 6.5 rule 4, 11.2): name of the claim and the LPID claims disclosed in it.
+COMPANY_CREDENTIAL_CLAIM = "company_credential"
+COMPANY_CREDENTIAL_DISCLOSED = ["legal_name", "ebwoid", "euid", "country"]

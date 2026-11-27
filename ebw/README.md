@@ -59,10 +59,11 @@ Requests use no `credential_sets` and only claims of the top level. The EBW-Conn
    - Step 1: scan with the wallet app (PID and mandate).
    - Step 2: enter the wallet address of the Business Wallet (it is on its start page; the browser remembers it) and "Open in Business Wallet". In the Business Wallet, "Approve".
    - The portal checks the verification attestation as C1-M2 does and then lists the company under "Registered companies". At sign-in it shows whether the represented company is registered.
-5. **Power of attorney for an employee:** In the test tools, offer a test PID for another person and scan it with the wallet of that person. In the Business Wallet, "Issue a power of attorney" with the same name and the same date of birth; the person scans the QR code.
+5. **Power of attorney for an employee:** In the test tools, offer a test PID for another person and scan it with the wallet of that person. In the Business Wallet, "Issue a power of attorney" with the same name and the same date of birth; the person scans the QR code. The Business Wallet refuses a "Valid until" before today and a date whose year cannot be meant (a year typed with two digits arrives as the year 30).
    - Sign-in of the employee at the Business Wallet: confirmed through the key of the Business Wallet (`client_key`).
    - Onboarding by the employee: confirmed through the key of the LPID (`company_key`).
-   - Sign-in of the employee at the portal without the Business Wallet: `NOT_CONFIRMED` (`ISSUER_NOT_TRUSTED`), because the OSP does not know the Business Wallet.
+   - Sign-in of the employee at the portal without the Business Wallet: confirmed through the LPID inside the power of attorney (`company_credential`). The Business Wallet puts its LPID into every power of attorney it issues (claim `company_credential`, always visible, without the address). The EBW-Connector checks that LPID against the trust list and its status list, and then the signature of the power of attorney with the key of the LPID. A power of attorney without it, issued before this change, stays `NOT_CONFIRMED` (`ISSUER_NOT_TRUSTED`): issue it again.
+   - A verification attestation for the employee alone: the scopes `openid profile representation attestation`, without `company`. The attestation then has the purpose `representation` instead of `onboarding`, names the company of the power of attorney, and the Business Wallet takes no part. The portal uses it when an employee joins a company (C2-M2).
 6. **Revocation:** Revoke the power of attorney in the Business Wallet. The next sign-in of the employee fails with `CREDENTIAL_REVOKED` (status list, after 5 seconds at most).
 7. **Start over:** "Reset portal" in the OSP 2.0 demo portal deletes the registrations; "Reset Business Wallet" deletes the LPID and the powers of attorney. Keys and the credentials in the wallet app stay.
 
@@ -74,6 +75,10 @@ Requests use no `credential_sets` and only claims of the top level. The EBW-Conn
 
 Starts the three services on test ports with empty folders and checks the acceptance cases of C5-M1 section 13. A script plays the browser and the EUDI Wallet; the Business Wallet is the real one.
 
+## Container and Kubernetes
+
+`Dockerfile` builds one image for the three services; `EBW_SERVICE` picks the service of a container (`connector`, `business_wallet` or `test_tools`), and keys and data go to the volume at `/data`. The Helm chart [`charts/ebw-stack`](charts/ebw-stack/README.md) installs the stack in a cluster: one pod with the three containers, one volume, and an ingress with one public host name per service. Wallets on phones need these names with a certificate they trust. The chart is for demos and tests, like the stack itself.
+
 ## Layout
 
 | Folder | Content |
@@ -83,8 +88,10 @@ Starts the three services on test ports with empty folders and checks the accept
 | `business_wallet/` | Business Wallet |
 | `test_tools/` | test issuer, trust list, OSP 2.0 demo portal (`osp.py`) |
 | `tools/` | `start.py`, `run_tests.py` |
+| `Dockerfile`, `docker-entrypoint.sh` | container image of the three services |
+| `charts/ebw-stack/` | Helm chart of the stack |
 
-Keys are in `.keys/` of each service, data in `data/`; git ignores both. The settings of the EBW-Connector are in C5-M1 section 4; without `CLIENTS_FILE`, the demo portal (`demo-osp`) and the Business Wallet are registered as clients. The services reload changed code by themselves.
+Keys are in `.keys/` of each service, data in `data/`; git ignores both. The settings of the EBW-Connector are in C5-M1 section 4; without `CLIENTS_FILE`, the demo portal (`demo-osp`) and the Business Wallet are registered as clients. An entry may carry `page` (`theme`, `brand`, `tagline`): the page of the EBW-Connector then looks like that client, so a person sees where they sign in, and a line at its end names the EBW-Connector. The themes are `wallet` (Business Wallet), `portal` (demo portal) and `tractusx` (the Dataspace Management UI, dark); without `page` the page keeps the look of the EBW-Connector, and the page shown without the cookie of the transaction always does. `demo-osp` and `business-wallet` keep their look when a clients file lists them without `page`. The services reload changed code by themselves.
 
 ## Left out on purpose
 

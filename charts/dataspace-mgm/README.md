@@ -137,6 +137,8 @@ helm uninstall dataspace-mgm --namespace dataspace-mgm
 | frontend.config.environment | string | `"prod"` | Environment name shown by the UI: `local`, `dev`, `int` or `prod` |
 | frontend.enabled | bool | `true` | Whether the Dataspace Management UI is installed |
 | frontend.extraEnv | list | `[]` | Further environment variables of the frontend container |
+| frontend.extraVolumeMounts | list | `[]` | Further volume mounts for the frontend container (`BFF_EBW_KEY_FILE` names the mounted file) |
+| frontend.extraVolumes | list | `[]` | Further volumes for the frontend pod, e.g. the secret with the key of the BFF at the EBW-Connector |
 | frontend.image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | frontend.image.repository | string | `"tractusx/dataspace-mgm-ui"` | Image repository on DockerHub |
 | frontend.image.tag | string | `""` | Image tag; defaults to the `appVersion` of the chart |
