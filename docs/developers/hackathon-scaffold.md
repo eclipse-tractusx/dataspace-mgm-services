@@ -84,8 +84,10 @@ The user interface lives in [dataspace-mgm-ui](https://github.com/eclipse-tractu
 | Folder | Content |
 |---|---|
 | `portal_common/` | shared building blocks: token validation (`tokens`), `service_token(module)`, Problem Details (`problems`), installation settings (`settings`), queries to neighbours with the error rule (`neighbours`), event relay (`events`), access to the CSP with `private_key_jwt` (`csp`), spec access (`spec`), spec-driven stand-ins (`standin`) |
-| `modules/<module>/` | one folder per module of the spec (`interface.py`, `router.py`, see [Module structure](#module-structure-and-calls-between-modules)); `c12_m1` is Process Orchestration (provided), all others are stand-ins |
-| `controllers/` | APIs of the installation outside the modules, laid out as in the Industry Core Hub backend: one folder per API category and version (`controllers/fastapi/routers/<category>/v1/<name>_api.py`), mounted under `/api/v1`. First: the event inbox `POST /api/v1/events/inbox` (FRAMEWORK 6) |
+| `features/<feature>/` | migrated modules, one package per feature with `controllers/` (one folder per API path segment), `services/`, `managers/`, `models/`, `router.py`, `main.py` and an index (ADR-0003); first: `registration` (C1-M2) and `company_profile` (C3-M1) |
+| `runtimes/` | deployable apps made of features: `installation` (every module), the hybrid `onboarding`; `RUNTIME=<name> python -m runtimes` |
+| `modules/<module>/` | one folder per module of the spec not migrated yet (`interface.py`, `router.py`, see [Module structure](#module-structure-and-calls-between-modules)); Process Orchestration (C12-M1) is the feature `features/process_orchestration/` |
+| `controllers/` | APIs of the installation outside the modules, laid out as in the Industry Core Hub backend: one folder per API category and version (`controllers/fastapi/routers/<category>/v1/<name>.py`), mounted under `/api/v1`. First: the event inbox `POST /api/v1/events/inbox` (FRAMEWORK 6) |
 | `scaffold/` | the installation app (`create_app`) and the module registry |
 | `iam/` | the test Portal IAM: Keycloak with the realm of C2-M5, test persons and a stand-in for the EBW-Connector (see [iam/README.md](../../iam/README.md)) |
 | `ebw/` | for tests with a real wallet app on a phone: EBW-Connector (C5-M1), Business Wallet, test issuer and OSP 2.0 demo portal; runs on its own (see [ebw/README.md](../../ebw/README.md)) |
@@ -118,6 +120,9 @@ The user interface lives in [dataspace-mgm-ui](https://github.com/eclipse-tractu
   accepted).
   A split-out module delivers its events over HTTP to the event inbox `POST /api/v1/events/inbox`
   (`application/cloudevents+json`, or binary mode with `ce-` headers; its own service token).
+  Without further settings a runtime forwards to the runtime of Process Orchestration (`C12_M1_URL` /
+  `MODULE_URLS`), the event hub, which routes each event on to the runtimes with subscribers (ADR-0006);
+  `EVENT_SINKS` adds further inboxes.
 - **Live updates for the UI** (Server-Sent Events, C11-M1 7.6, C12-M1 7.6): `sse.Broker` per
   module with a replay buffer in memory (`SSE_REPLAY_SIZE`), `sse.response(...)` for the
   `text/event-stream` answer: `Last-Event-ID`, heartbeat (`SSE_HEARTBEAT_SECONDS`), end at token
@@ -132,7 +137,8 @@ The user interface lives in [dataspace-mgm-ui](https://github.com/eclipse-tractu
 Binding convention for every module folder `modules/<id>/` (id like `c1_m2`):
 
 1. `interface.py` holds the public functions of the module. Other modules import only from there,
-   e.g. `from modules.c1_m2.interface import get_application_internal`; never a neighbour's router,
+   e.g. `from features.offers.interface import get_offer_internal` (a module not migrated yet:
+   `from modules.<id>.interface import ...`); never a neighbour's router,
    service or data.
 2. Names: a step by its step name in snake_case (`create-company` -> `create_company`), a query by
    its operationId in snake_case (`getApplicationInternal` -> `get_application_internal`).
@@ -147,10 +153,10 @@ Binding convention for every module folder `modules/<id>/` (id like `c1_m2`):
 5. `router.py` is a thin HTTP layer: it checks token and permission and calls the module's own
    interface functions.
 6. Addressing (FRAMEWORK 4.7) as above: `neighbours.query(caller, target, "query_company",
-   companyId=...)` calls `modules.c3_m1.interface.query_company` for `in-process`, otherwise HTTP
+   companyId=...)` calls `features.company_profile.interface.query_company` for `in-process`, otherwise HTTP
    with the service token, or raises 502 `neighbour-not-configured` when the address is empty.
 7. Process Orchestration calls a step `c3-m1.create-company` of `flows.yaml` as
-   `modules.c3_m1.interface.create_company(input)` and a lookup `c8-m1.getOfferInternal` as
+   `features.company_profile.interface.create_company(input)` and a lookup `c8-m1.getOfferInternal` as
    `get_offer_internal(**params)` when the module is `in-process`, otherwise over HTTP.
 8. The stand-ins expose the same functions. `__getattr__ = standin.missing_interface(MODULE)` at
    the end of `interface.py` adds every step and query the module does not define yet (steps answer
@@ -240,16 +246,16 @@ unknown step, lookup or event, a source that is not earlier, or a required input
 source (README 6.2; `FLOWS_CHECK=warn` turns the last two into warnings). Lookups follow README
 6.8 (operationId, field paths, object mappings, `join`); a failed lookup is an error of the step.
 With an empty module address, the built-in stand-in answers with the results of README 11.3.
-Processes are kept in memory.
+Processes and step runs are kept in SQLModel tables (`portal_common.database`; in-memory SQLite without a database URL).
 
-Live state for the UI (README 7.6 to 7.8): `GET /api/c12-m1/processes/{processId}/events` for OSP
-staff and `GET /api/c12-m1/applications/{applicationId}/events` for the applicant, event
-`process-changed` with the full state of the process. The stand-in of C11-M1 streams its inbox at
-`GET /api/c11-m1/notifications/events`. Try it:
+Live state for the UI (README 7.6 to 7.8): `GET /api/process-orchestration/processes/{processId}/events` for OSP
+staff and `GET /api/process-orchestration/applications/{applicationId}/events` for the applicant, event
+`process-changed` with the full state of the process. C11-M1 (feature `notifications`) streams its inbox at
+`GET /api/notifications/notifications/events`. Try it:
 
 ```bash
 TOKEN=$(uv run python iam/test/get-token.py erika)
-curl -N -H "Authorization: Bearer $TOKEN" localhost:8000/api/c11-m1/notifications/events
+curl -N -H "Authorization: Bearer $TOKEN" localhost:8000/api/notifications/notifications/events
 ```
 
 ## Provisional readings of the spec

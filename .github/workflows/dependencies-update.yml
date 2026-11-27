@@ -33,6 +33,12 @@
 # a day, so an approved review turns into a pull request without anyone
 # watching the IP Lab issue. When the file matches main again, the branch is
 # deleted and the pull request closes.
+#
+# TRG 7.04 also asks for an issue in this repository that links the IP Lab
+# requests: the job keeps one open while anything is restricted and closes it
+# when every dependency is approved. Pull requests opened with GITHUB_TOKEN
+# start no workflows, so the job dispatches the Eclipse Dash IP Check on the
+# pull request branch itself.
 
 name: "Update DEPENDENCIES"
 
@@ -62,7 +68,9 @@ jobs:
     name: Regenerate DEPENDENCIES
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
+      issues: write
       pull-requests: write
     steps:
       - name: Checkout repository
@@ -118,12 +126,13 @@ jobs:
           java -jar ./dash.jar PACKAGE -project automotive.tractusx -timeout 300 \
             -repo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             -review -token "$GITLAB_API_TOKEN" 2>&1 | tee review.log || true
-          grep -oE 'https://gitlab\.eclipse\.org/[^ ]+/issues/[0-9]+' review.log | sort -u > reviews.txt || true
+          # IP Lab links its requests as `/-/issues/<n>` or `/-/work_items/<n>`.
+          grep -oE 'https://gitlab\.eclipse\.org/[^ ]+/-/(issues|work_items)/[0-9]+' review.log | sort -u > reviews.txt || true
 
       - name: Write pull request body
         run: |
           {
-            echo "Dash regenerated \`$DEP_FILE\` from \`uv.lock\` on main."
+            echo "Dash regenerated \`$DEP_FILE\` from \`uv.lock\` on \`$GITHUB_REF_NAME\`."
             echo
             restricted=$(grep 'restricted' "$DEP_FILE" || true)
             if [ -n "$restricted" ]; then
@@ -147,10 +156,11 @@ jobs:
               echo "Every dependency is approved."
             fi
             echo
-            echo "Pull requests opened by this workflow do not start other workflows. Close and reopen it to run the checks."
+            echo "This workflow starts the Eclipse Dash IP Check on this pull request. Pull requests opened by this workflow start no other workflows; close and reopen it to run the remaining checks."
           } > pr-body.md
 
       - name: Open or update pull request
+        id: cpr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -162,3 +172,55 @@ jobs:
           commit-message: "chore(deps): update DEPENDENCIES"
           title: "chore(deps): update DEPENDENCIES"
           body-path: pr-body.md
+
+      # Pull requests opened with GITHUB_TOKEN start no workflows, but a
+      # workflow_dispatch does, so the IP check runs on the pull request head.
+      - name: Run the Eclipse Dash IP Check on the pull request
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run dependencies.yml --repo "$GITHUB_REPOSITORY" --ref chore/update-dependencies
+
+      # TRG 7.04: "Create an issue in YOUR repository with the links to the IP
+      # Lab issues". One issue, found by its title, is updated on every run.
+      - name: Track IP review requests in an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "Eclipse Dash: IP review of restricted dependencies"
+          PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
+        run: |
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" \
+            --json number,title --jq '.[] | select(.title == env.TITLE) | .number' | head -n1)
+          pending=$(grep -E ', (restricted|rejected),' "$DEP_FILE" || true)
+          if [ -z "$pending" ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Every dependency in \`$DEP_FILE\` is approved."
+            fi
+            exit 0
+          fi
+          {
+            echo "The Eclipse Dash License Tool reports these dependencies of \`uv.lock\` on \`$GITHUB_REF_NAME\` as restricted or rejected (TRG 7.04):"
+            echo
+            echo '```'
+            echo "$pending"
+            echo '```'
+            echo
+            if grep -q 'missing-token' reviews.txt; then
+              echo "No review was requested: the \`DASH_GITLAB_API_TOKEN\` secret is not set."
+            elif [ -s reviews.txt ]; then
+              echo "IP Lab review requests:"
+              sed 's/^/- /' reviews.txt
+            else
+              echo "Dash reported no review request in this run."
+            fi
+            echo
+            if [ -n "$PR_URL" ]; then
+              echo "Pull request with the regenerated \`$DEP_FILE\`: $PR_URL"
+            fi
+            echo "Last updated by [this workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). It closes this issue when every dependency is approved."
+          } > issue-body.md
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --repo "$GITHUB_REPOSITORY" --body-file issue-body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file issue-body.md
+          fi

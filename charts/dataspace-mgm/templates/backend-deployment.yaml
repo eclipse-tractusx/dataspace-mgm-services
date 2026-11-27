@@ -103,6 +103,7 @@ spec:
                   name: {{ $secretName }}
                   key: SERVICE_CLIENT_SECRET
             {{- end }}
+            {{- include "dataspace-mgm.database.env" . | nindent 12 }}
             {{- range $name, $value := .Values.backend.env }}
             - name: {{ $name }}
               value: {{ $value | toString | quote }}

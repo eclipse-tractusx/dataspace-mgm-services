@@ -163,7 +163,7 @@ it is not, I read it on GitHub. I never assume that the other side matches.
 | Rules for every coding agent (binding) | `AGENTS.md` (rules, call convention, module folder, definition of done, commits) |
 | Shared building blocks | `portal_common/`: `tokens` (validation, `require_spec`, `service_token`), `problems` (`Problem`, `route_class`), `settings`, `neighbours` (calls with the error rule), `events` (outbox relay), `sse`, `csp`, `spec`, `standin` |
 | Installation and registry | `scaffold/app.py` (`create_app`, `/scaffold/modules`, `/scaffold/events`, `/scaffold/reset`, `/health`), `scaffold/registry.py` |
-| Modules | `modules/<id>/` with `interface.py` (public functions), `router.py` (thin HTTP layer, `reset()`, `on_event()`, `STANDIN`/`PROVIDED`); `c12_m1/engine.py` is Process Orchestration (provided) |
+| Modules | `modules/<id>/` with `interface.py` (public functions), `router.py` (thin HTTP layer, `reset()`, `on_event()`, `STANDIN`/`PROVIDED`); Process Orchestration is the feature `features/process_orchestration/` (engine in `services/engine.py`) |
 | Test Portal IAM | `iam/` (Keycloak realms `CX-Central` for OSP A, `CX-Central-B` for OSP B, test realm `TEST-EBW`), `iam/test/get-token.py <person>` |
 | Real wallets | `ebw/` (EBW-Connector C5-M1, Business Wallet, test issuer, demo portal; runs on its own) |
 | Test tools | `tools/` (in-memory IAM, CSP stand-in on :8100, EBW signer, provider double, Keycloak admin) |
@@ -281,6 +281,7 @@ follow it instead of improvising:
 | `dependencies-and-dash` | Eclipse Dash like CI, `DEPENDENCIES`, IP reviews | `dash-check.sh` | both |
 | `merge-guard` | a branch before its PR: allowed paths and module rules (service) or architecture rules (UI), headers, commits, secrets | `merge-guard.py` | both (one per repo) |
 | `module-map` | which modules are stand-ins or team code, what each folder answers itself, call-convention findings | `module-map.py` | service |
+| `feature-architecture` | a feature in `features/` against the folder architecture (`features/AGENTS.md`, F1 to F14) | `feature-check.py` | service |
 | `implement-module-from-spec`, `review-module` | the scaffold's own procedures to build and review one module | – | service (with the scaffold) |
 
 Scripts run from the repository root (`.claude/skills/<skill>/scripts/<script>`), read the specs found by
@@ -299,10 +300,11 @@ the neighbouring product.
 **"Why 401 / 403 / 404?"** → `portal-token-inspect` with `--op`. Then the scope rule of FRAMEWORK 4.3.
 
 **"What happens after event X?" / "The process is stuck"** → `flow-trace` (`event`, `show`), then `GET /scaffold/events`
-and `GET /api/c12-m1/processes/{processId}` on the running installation.
+and `GET /api/process-orchestration/processes/{processId}` on the running installation.
 
 **"Implement module X" / "Replace the stand-in"** → the scaffold skill `implement-module-from-spec`, with `module-map`
-before and after. Rules: `AGENTS.md`. Proof: `uv run pytest -q && uv run python demo.py`.
+before and after. For a migrated feature (`features/<name>/`): `features/AGENTS.md` and `feature-architecture`
+(`feature-check.py <name> --strict`) after every change to the tree. Rules: `AGENTS.md`. Proof: `uv run pytest -q && uv run python demo.py`.
 
 **"Review this module / this PR" / "Is my branch ready?"** → `merge-guard` (and `module-map <id>`, the scaffold's
 `review-module` for behaviour). In the UI: `merge-guard` and `contract-seam vendored`.

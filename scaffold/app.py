@@ -38,13 +38,13 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+from collections.abc import Iterable
 from typing import Annotated
 
 from fastapi import FastAPI, Query
 
 from controllers.fastapi import include as include_controllers
-from portal_common import csp, events, http, problems, settings, standin, tokens
-
+from portal_common import csp, database, events, http, problems, runtime, settings, standin, tokens
 from tools import iam_backend
 
 from . import registry
@@ -64,7 +64,7 @@ def _defaults() -> None:
                 os.environ.setdefault(k, str(v).replace("{BASE_URL}", base))
 
 
-def reset_all(entries) -> None:
+def reset_all(entries, *, reset_modules: bool = True) -> None:
     """Fresh state in every module and test tool (IAM first, C11/C12 last)."""
     from tools import ebw_signer, provider_double, test_iam
     events.RELAY.reset()
@@ -75,16 +75,23 @@ def reset_all(entries) -> None:
         from tools import keycloak_admin
         keycloak_admin.reset_realm()
     provider_double.reset()
-    for e in entries:
-        if e.module and hasattr(e.module, "reset"):
-            e.module.reset()
+    if reset_modules:
+        for e in entries:
+            if e.module and hasattr(e.module, "reset"):
+                e.module.reset()
     _ = ebw_signer  # the signing key stays, so attestations issued before a reset stay valid
 
 
-def create_app() -> FastAPI:
+def create_app(features: Iterable[str] | None = None) -> FastAPI:
+    """The installation app with `features` (readable names or spec ids, `runtimes/`), else the
+    features of `ENABLED_FEATURES`, else every module."""
     settings.load()
     _defaults()
-    entries = registry.load()
+    enabled = runtime.enabled_modules(features)
+    for mid in enabled or ():   # a split runtime calls its own features in-process, whatever MODULE_URLS says
+        os.environ.setdefault(mid.upper().replace("-", "_") + "_URL", "in-process")
+    entries = registry.load(enabled)
+    database.check_isolation(entries)
     events.RELAY.clear_subscribers()
 
     @contextlib.asynccontextmanager
@@ -112,7 +119,7 @@ def create_app() -> FastAPI:
             events.subscribe(e.id, e.module.on_event)
     include_controllers(app)   # APIs of the installation outside the modules, /api/v1/<category>/...
     app.state.entries = entries
-    reset_all(entries)
+    reset_all(entries, reset_modules=False)
 
     @app.get("/scaffold/modules", tags=["Scaffold"])
     def modules():

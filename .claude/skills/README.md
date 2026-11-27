@@ -42,6 +42,7 @@ Scripts run from anywhere inside the repository and read the specs that `portal-
 | [portal-spec-sources](portal-spec-sources/SKILL.md) | Modules, operations, permissions and scopes, steps and queries with their Python names, events, README sections, open points; fetch and update the specs | `spec-src.py` |
 | [flow-trace](flow-trace/SKILL.md) | Process Orchestration flows: what runs next, what a step waits for, input sources, consistency of `flows.yaml` | `flow-trace.py` |
 | [module-map](module-map/SKILL.md) | Which modules are stand-ins or team code, what each folder answers itself, call-convention findings | `module-map.py` |
+| [feature-architecture](feature-architecture/SKILL.md) | A feature in `features/` against the folder architecture of ADR-0003 (`features/AGENTS.md`, F1 to F14): shape, controller tree, layers, imports, leftovers of the migration | `feature-check.py` |
 | [merge-guard](merge-guard/SKILL.md) | A team branch before its PR: allowed paths, the module against its spec, headers, commits, secrets, definition of done | `merge-guard.py` |
 | [contract-seam](contract-seam/SKILL.md) | UI against backend: base paths, casing, errors, BFF, vendored specs, calls in the UI code | `seam-check.py` |
 | [portal-token-inspect](portal-token-inspect/SKILL.md) | 401 / 403 / 404 explained from a person's token and the operation's permission and scope | `token-inspect.py` |

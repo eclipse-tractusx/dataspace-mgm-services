@@ -1,0 +1,89 @@
+#################################################################################
+#  Copyright (c) 2026 Catena-X Automotive Network e.V.
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License, Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0.
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
+#
+#  AI Disclosure: This file was entirely AI-generated.
+#  The AI-generated portions are made available under CC0-1.0 and not subject
+#  to the project's license. The human contributor has reviewed and verified
+#  that the code is correct.
+#
+#  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
+#  Assisted-By: GitHub Copilot (claude-opus-5.5)
+#################################################################################
+
+# TRG 7.02: every new file carries the license and copyright header of
+# CONTRIBUTING.md ("License headers"). Checks the files a pull request adds,
+# with the rule of .claude/skills/merge-guard/scripts/merge-guard.py: code and
+# configuration files fail without `Copyright (c)` (or `SPDX-FileCopyrightText`)
+# and `SPDX-License-Identifier` in their first 25 lines; Markdown without an
+# `SPDX-License-Identifier` only warns (TRG 7.07). Legal files of TRG 7.01 and
+# empty files are skipped.
+
+name: "License headers"
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-headers:
+    name: TRG 7.02 license headers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check the headers of added files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base="${BASE_SHA:-$(git rev-parse HEAD~1)}"
+          legal='^(CODE_OF_CONDUCT\.md|CONTRIBUTING\.md|SECURITY\.md|NOTICE\.md|LICENSE|LICENSE_non-code|CHANGELOG\.md|AUTHORS\.md|DEPENDENCIES|CLAUDE\.md|AGENTS\.md)$'
+          # Written to a file first, so a failing `git diff` fails the step.
+          git diff -z --name-only --diff-filter=A "$base"...HEAD > added-files
+          failed=0
+          while IFS= read -r -d '' file; do
+            name=$(basename "$file")
+            if [[ "$name" =~ $legal ]] || [ ! -s "$file" ]; then
+              continue
+            fi
+            head=$(head -n 25 "$file")
+            case "$file" in
+              *.py|*.sh|*.ts|*.tsx|*.js|*.mjs|*.yaml|*.yml|*.toml)
+                if ! grep -qE 'Copyright \(c\)|SPDX-FileCopyrightText' <<< "$head" \
+                  || ! grep -q 'SPDX-License-Identifier' <<< "$head"; then
+                  echo "::error file=$file::License header missing (Copyright + SPDX-License-Identifier, TRG 7.02)"
+                  failed=1
+                fi
+                ;;
+              *.md)
+                if ! grep -q 'SPDX-License-Identifier' "$file"; then
+                  echo "::warning file=$file::No license information (header or NOTICE section with SPDX-License-Identifier, TRG 7.07)"
+                fi
+                ;;
+            esac
+          done < added-files
+          if [ "$failed" -ne 0 ]; then
+            echo "Copy the header of an existing file, see CONTRIBUTING.md \"License headers\"."
+            exit 1
+          fi
+          echo "Every added file carries a license header."

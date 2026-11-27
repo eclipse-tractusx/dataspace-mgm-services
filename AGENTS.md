@@ -62,7 +62,8 @@ variable names, own test data and silent errors. The rules below prevent this.
 ## Call convention between modules (binding)
 
 1. Every module `modules/<id>/` (id like `c1_m2`) has `interface.py` with its public functions.
-   Other modules import ONLY from there: `from modules.c1_m2.interface import get_application_internal`.
+   Other modules import ONLY from there: `from modules.<id>.interface import ...`; for a migrated feature
+   `from features.offers.interface import get_offer_internal` (ADR-0003).
 2. Names: step = step name in snake_case (`create-company` → `create_company`); query =
    operationId in snake_case (`getApplicationInternal` → `get_application_internal`).
 3. Signatures: step `def create_company(input: dict) -> dict` (input = JSON body of
@@ -80,7 +81,8 @@ variable names, own test data and silent errors. The rules below prevent this.
 7. C12 finds steps and queries by these names. Stand-in modules expose the same functions, so a
    team replaces the stand-in folder and nothing else changes.
 
-The folder name uses `c3_m1`; the spec, the URL path, `Problem` and `service_token` use `c3-m1`.
+The folder name uses `c3_m1`; the spec, the URL path, `Problem` and `service_token` use `c3-m1` (a migrated feature's
+URL path uses its readable name, see below).
 
 ## The module folder
 
@@ -91,10 +93,28 @@ Operations you have not implemented yet are added from the spec (steps answer `D
 
 APIs of the installation that belong to no module live in `controllers/`, laid out as in the Industry
 Core Hub backend: one folder per API category and version, one file per controller,
-`controllers/fastapi/routers/<category>/v1/<name>_api.py` with its own `router`, mounted under
+`controllers/fastapi/routers/<category>/v1/<name>.py` with its own `router`, mounted under
 `/api/v1` by `controllers/fastapi/__init__.py`. The first one is the event inbox
 `POST /api/v1/events/inbox` (FRAMEWORK 6, OP-54): split-out modules deliver their CloudEvents there.
-Module APIs never go there; they stay in `modules/<id>/router.py` under `/api/<module>`.
+Module APIs never go there; they stay in `modules/<id>/router.py` (or `features/<name>/router.py`) under
+`/api/<module>` (a migrated feature under `/api/<feature>`, for example `/api/company-profile`).
+
+## Migrated features (ADR-0003)
+
+A module that is migrated lives in `features/<name>/` under its readable name (`registration` for C1-M2,
+`app_access` for C2-M2, `technical_user` for C2-M3, `application_review` for C1-M3, `company_profile` for C3-M1, `credentials` for C4-M1, `offers` for C8-M1, `notifications` for C11-M1, `connector` for C6-M1, `subscriptions` for C10-M1, `dataspace_wallet_interface` for C4-M2) instead of `modules/<id>/`; for its team that folder replaces `modules/<id>/` in
+rule 1. Every feature has the same shape: `__init__.py` (index: `NAME`, `MODULE`, `reset()`, optional
+`on_startup()` / `on_event(event)`), `router.py`, `main.py`, `interface.py` (the call convention, unchanged),
+`controllers/` (HTTP only; one folder per path segment of the API, each with a `controller.py` whose paths are
+relative to the folder, see `portal_common.routing`), `services/` (business logic, no HTTP), `managers/` (state, adapters) and `models/`.
+Its API is served under its readable name (`/api/registration`, `/api/app-access`, `/api/technical-user`, `/api/application-review`, `/api/company-profile`, `/api/credentials`, `/api/offers`, `/api/notifications`, `/api/connector`, `/api/dataspace-wallet-interface`, `/api/subscriptions`), never under the spec id;
+Problem types, events, permissions and service accounts keep the spec id. Other modules import only
+`features.<name>.interface`. Runtimes in `runtimes/` import features
+(`create_runtime(registration, company_profile)`); `RUNTIME=<name> python -m runtimes` starts one.
+Process Orchestration (C12-M1) is the feature `process_orchestration` under `/api/process-orchestration`.
+The binding folder rules of a feature (F1 to F17) are in [`features/AGENTS.md`](features/AGENTS.md); check them with
+`.claude/skills/feature-architecture/scripts/feature-check.py <feature> --strict` while you develop a feature.
+Also migrated: `csp_connection` for C3-M2, served under `/api/csp-connection`.
 
 ## Definition of done
 
@@ -140,6 +160,8 @@ C2-M2 and C2-M3 call its Admin API with the service accounts `svc-c2-m2` and `sv
 
 - `.claude/skills/implement-module-from-spec/SKILL.md`: build or extend your module from the spec.
 - `.claude/skills/review-module/SKILL.md`: check a module before a pull request.
+- `.claude/skills/feature-architecture/SKILL.md`: check that a feature in `features/` follows the folder
+  architecture (`features/AGENTS.md`).
 
 The skills are plain Markdown. Claude Code loads them as skills; any other agent can use them, for
 example: "read `.claude/skills/implement-module-from-spec/SKILL.md` and follow it".

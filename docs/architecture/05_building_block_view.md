@@ -52,12 +52,17 @@ Each module folder contains:
 | `router.py` | HTTP routes as described in the module's `openapi.yaml` |
 
 APIs of the installation that belong to no module are in `controllers/`: one folder per API category and version,
-as in the Industry Core Hub backend (`controllers/fastapi/routers/<category>/v1/<name>_api.py`), mounted under
+as in the Industry Core Hub backend (`controllers/fastapi/routers/<category>/v1/<name>.py`), mounted under
 `/api/v1`. The first is the event inbox `POST /api/v1/events/inbox`: split-out modules deliver their events there as
 CloudEvents (structured or binary content mode, token of the service account of the publishing module; FRAMEWORK 6).
+In a split installation every runtime forwards its events to the runtime of Process Orchestration (C12-M1), the
+event hub, which runs its flows and routes each event on to the inboxes of the runtimes with subscribers
+([ADR-0006](decisions/ADR-0006-process-orchestration-as-event-hub.md)).
 
 The specification of each module (behaviour, data, rules, operations, steps, queries, events, errors, acceptance
 criteria and test data) is kept per module folder in the specification; see [docs/api](../api/README.md).
+
+The feature-first layout for migrated modules (`features/<feature>/`) is defined in [ADR-0003](decisions/ADR-0003-feature-first-layout-and-runtimes.md), with internal layer boundaries and quality verification defined in [ADR-0004](decisions/ADR-0004-internal-boundaries-and-quality-gate.md).
 
 ## NOTICE
 

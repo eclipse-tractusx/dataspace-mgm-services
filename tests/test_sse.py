@@ -39,12 +39,13 @@ import uvicorn
 from fastapi import FastAPI
 
 from conftest import BASE, person_token
-from modules.c11_m1 import router as c11
-from modules.c12_m1 import engine as eng
-from modules.c12_m1 import router as c12
-from portal_common import events
+from features import notifications as c11
+from features.notifications.managers import store as c11_store
+from features.notifications.router import router as c11_router
+from features.process_orchestration import router as c12
+from features.process_orchestration.services import engine as eng
+from portal_common import events, problems
 from portal_common import http as phttp
-from portal_common import problems
 from tools import test_iam
 
 APPLICATION = "0f8e2d4c-6b1a-4c3e-8f7d-2a9b1c0d3e4f"   # FRAMEWORK 7a
@@ -76,7 +77,7 @@ def server(monkeypatch):
     c11.reset()
     app = FastAPI()
     problems.install(app)
-    for r in (test_iam.router, c12.router, c11.router):
+    for r in (test_iam.router, c12.router, c11_router):
         app.include_router(r)
     phttp.register_local(BASE, app)   # JWKS of the test IAM for the token check
     srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning", lifespan="off",
@@ -171,7 +172,7 @@ def test_staff_follows_a_process_until_completed(server):
     e = eng.get_engine()
     e.on_event(submitted())
     pid = next(iter(e.processes))
-    s = server(f"/api/c12-m1/processes/{pid}/events", "otto")
+    s = server(f"/api/process-orchestration/processes/{pid}/events", "otto")
     assert s.status == 200 and s.content_type.startswith("text/event-stream")
     first = s.next()   # README 7.6: without Last-Event-ID the current state first
     assert s.retry == "3000" and first["event"] == "process-changed" and first["data"]["status"] == "WAITING"
@@ -186,17 +187,17 @@ def test_staff_follows_a_process_until_completed(server):
 
 
 def test_applicant_follows_own_application_only(server):
-    erika = server(f"/api/c12-m1/applications/{APPLICATION}/events", "erika")
-    lieschen = server(f"/api/c12-m1/applications/{APPLICATION}/events", "lieschen")
+    erika = server(f"/api/process-orchestration/applications/{APPLICATION}/events", "erika")
+    lieschen = server(f"/api/process-orchestration/applications/{APPLICATION}/events", "lieschen")
     assert erika.status == 200 and lieschen.status == 200 and erika.quiet(0.3)   # no process yet: open, empty
     eng.get_engine().on_event(submitted())
     msg = erika.until(lambda m: m["data"]["status"] == "WAITING")[-1]
     assert msg["data"]["flowKey"] == "onboarding" and msg["data"]["subjectId"] == APPLICATION
     assert lieschen.quiet(0.5)   # another person's application: nothing, and no 404
     pid = msg["data"]["processId"]
-    staff_only = server(f"/api/c12-m1/processes/{pid}/events", "erika")
+    staff_only = server(f"/api/process-orchestration/processes/{pid}/events", "erika")
     assert staff_only.status == 403 and staff_only.body["type"] == "urn:c12-m1:problem:forbidden"
-    bad = server("/api/c12-m1/applications/not-a-uuid/events", "erika")
+    bad = server("/api/process-orchestration/applications/not-a-uuid/events", "erika")
     assert bad.status == 400
 
 
@@ -204,41 +205,42 @@ def test_reconnect_replays_missed_process_events(server):
     e = eng.get_engine()
     e.on_event(submitted())
     pid = next(iter(e.processes))
-    s = server(f"/api/c12-m1/processes/{pid}/events", "otto")
+    s = server(f"/api/process-orchestration/processes/{pid}/events", "otto")
     last = s.next()["id"]
     s.stop.set()                     # connection lost ...
     e.on_event(approved())           # ... while the process runs to the end
-    again = server(f"/api/c12-m1/processes/{pid}/events", "otto", last_id=last)
+    again = server(f"/api/process-orchestration/processes/{pid}/events", "otto", last_id=last)
     replayed = again.until(lambda m: m["data"]["status"] == "COMPLETED")
     assert len(replayed) > 1 and all(m["id"] != last for m in replayed)
     assert [m["data"]["status"] for m in replayed][0] == "RUNNING"   # the first missed change, not a snapshot
-    unknown = server(f"/api/c12-m1/processes/{pid}/events", "otto", last_id="gone-7")
+    unknown = server(f"/api/process-orchestration/processes/{pid}/events", "otto", last_id="gone-7")
     assert unknown.next()["data"]["status"] == "COMPLETED"           # not kept: current state
 
 
 def test_stream_needs_a_token_in_the_header(server):
     pid = str(uuid.uuid4())
-    for path in (f"/api/c12-m1/processes/{pid}/events", f"/api/c12-m1/applications/{APPLICATION}/events",
-                 "/api/c11-m1/notifications/events"):
+    for path in (f"/api/process-orchestration/processes/{pid}/events",
+                 f"/api/process-orchestration/applications/{APPLICATION}/events",
+                 "/api/notifications/notifications/events"):
         assert server(path).status == 401
         assert server(path, token="not-a-token").status == 401
         token_in_url = server(f"{path}?access_token={person_token('otto')}")
         assert token_in_url.status == 401 and token_in_url.body["type"].endswith(":problem:unauthorized")
-    assert server(f"/api/c12-m1/processes/{pid}/events", "otto").status == 404
+    assert server(f"/api/process-orchestration/processes/{pid}/events", "otto").status == 404
 
 
 # ------------------------------------------------------------------ C11-M1 README 7.6
 
 
 def test_inbox_stream_created_and_done(server):
-    erika = server("/api/c11-m1/notifications/events", "erika")
-    otto = server("/api/c11-m1/notifications/events", "otto")
+    erika = server("/api/notifications/notifications/events", "erika")
+    otto = server("/api/notifications/notifications/events", "otto")
     trigger = submitted()
     c11.on_event(trigger)
     created = erika.next()
     assert created["event"] == "notification-created" and created["data"]["type"] == "APPLICATION_SUBMITTED"
     assert "content" not in created["data"] and otto.quiet(0.3)
-    assert c11.notifications[0]["sourceEventId"] == trigger["id"]   # the CloudEvent `id` (FRAMEWORK 6)
+    assert c11_store.notifications()[0]["sourceEventId"] == trigger["id"]   # the CloudEvent `id` (FRAMEWORK 6)
     pid = str(uuid.uuid4())
     c11.on_event(ev("ProcessStepFailed", processId=pid, flowKey="onboarding", subjectType="APPLICATION",
                     subjectId=APPLICATION, stepKey="register-company", errorType="x", retryable=False))
@@ -251,12 +253,12 @@ def test_inbox_stream_created_and_done(server):
 
 
 def test_inbox_reconnect_replays_or_resyncs(server):
-    s = server("/api/c11-m1/notifications/events", "erika")
+    s = server("/api/notifications/notifications/events", "erika")
     c11.on_event(submitted())
     last = s.next()["id"]
     s.stop.set()
     c11.on_event(ev("ApplicationCompleted", applicationId=APPLICATION))
-    again = server("/api/c11-m1/notifications/events", "erika", last_id=last)
+    again = server("/api/notifications/notifications/events", "erika", last_id=last)
     assert again.next()["data"]["type"] == "APPLICATION_COMPLETED"
-    unknown = server("/api/c11-m1/notifications/events", "erika", last_id="gone-1")
+    unknown = server("/api/notifications/notifications/events", "erika", last_id="gone-1")
     assert unknown.next()["event"] == "resync"

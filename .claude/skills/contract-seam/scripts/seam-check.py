@@ -60,11 +60,13 @@ CAMEL = re.compile(r"^[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+$")
 SNAKE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$")
 NO_SEAM = ("/me", "/config", "/auth/", "/repos/")  # BFF endpoints of the UI's server part, GitHub API
 # Names the frontend spec uses for backend modules (`/api/registration/...`) -> module id of the backend spec
-ALIASES = {"registration": "c1-m2", "review": "c1-m3", "users": "c2-m2", "technical-users": "c2-m3",
-           "companies": "c3-m1", "company": "c3-m1", "credentials": "c4-m1", "wallet": "c4-m2", "ebw": "c5-m1",
-           "connectors": "c6-m1", "apps": "c8-m1", "marketplace": "c8-m1", "offers": "c8-m1",
+ALIASES = {"registration": "c1-m2", "review": "c1-m3", "users": "c2-m2", "app-access": "c2-m2", "technical-users": "c2-m3", "technical-user": "c2-m3",
+           "csp-connection": "c3-m2",
+           "companies": "c3-m1", "company": "c3-m1", "credentials": "c4-m1", "wallet": "c4-m2", "dataspace-wallet-interface": "c4-m2", "ebw": "c5-m1",
+           "connectors": "c6-m1", "connector": "c6-m1", "apps": "c8-m1", "marketplace": "c8-m1", "offers": "c8-m1",
            "services": "c8-m1", "subscriptions": "c10-m1", "notifications": "c11-m1", "processes": "c12-m1",
-           "process": "c12-m1"}
+           "process": "c12-m1", "process-orchestration": "c12-m1",
+           "application-review": "c1-m3"}
 GENERIC = {"api", "id", "the"}
 
 

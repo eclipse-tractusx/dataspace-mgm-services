@@ -257,18 +257,22 @@ class IAM:
 
 
 _iam: IAM | None = None
+_iam_lock = threading.Lock()
 
 
 def iam() -> IAM:
     global _iam
     if _iam is None:
-        _iam = IAM()
+        with _iam_lock:
+            if _iam is None:
+                _iam = IAM()
     return _iam
 
 
 def reset() -> None:
     global _iam
-    _iam = None
+    with _iam_lock:
+        _iam = None
 
 
 # ---------------------------------------------------------------- HTTP (paths of C2-M5 openapi.yaml)

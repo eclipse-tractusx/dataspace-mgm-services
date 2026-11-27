@@ -27,9 +27,10 @@
 Layout as in the Industry Core Hub backend: one folder per API category under `routers/`, one
 folder per version, one file per controller with its own `router`:
 
-    controllers/fastapi/routers/<category>/v1/<name>_api.py   router = APIRouter(prefix="/<category>")
+    controllers/fastapi/routers/<category>/v1/<feature>.py   router = APIRouter(prefix="/<category>")
 
-`include(app)` mounts every controller under `/api/v1`, e.g. `POST /api/v1/events/inbox`. The APIs of
+`include(app)` mounts every controller under `/api/v1`, e.g. `POST /api/v1/events/inbox`, the event inbox that
+every runtime serves (in the runtime of Process Orchestration the inbox of the event hub, ADR-0006). The APIs of
 the modules stay in `modules/<id>/router.py` under `/api/<module>` (FRAMEWORK 4.1); a new category
 gets its own folder here and one line in `v1_router()`.
 """
@@ -37,20 +38,21 @@ from __future__ import annotations
 
 from fastapi import APIRouter, FastAPI
 
-from .routers.events.v1 import inbox_api
+from .routers.events.v1 import inbox
 
 API_V1 = "/api/v1"
 
 TAGS = [
-    {"name": inbox_api.TAG,
+    {"name": inbox.TAG,
      "description": "Event inbox of the installation: receives the CloudEvents of split-out modules over HTTP "
-                    "(FRAMEWORK 6, proposal OP-54)"},
+                    "(FRAMEWORK 6, proposal OP-54); in the runtime of Process Orchestration the inbox of the "
+                    "event hub, which routes every event on to the subscribing runtimes (ADR-0006)"},
 ]
 
 
 def v1_router() -> APIRouter:
     router = APIRouter(prefix=API_V1)
-    router.include_router(inbox_api.router)
+    router.include_router(inbox.router)
     return router
 
 

@@ -38,7 +38,11 @@ name is `event["type"]`, the content of FRAMEWORK 6 is in `event["data"]`.
 
 `receive(event)` takes a CloudEvent that arrived over HTTP (event inbox `POST /api/v1/events/inbox`,
 FRAMEWORK 6): checked with `validate()`, put into the outbox unchanged (same `id` and `time`), and
-delivered once per `source` and `id`.
+delivered once per `source` and `id`; an event this runtime published itself is not delivered again.
+
+Between runtimes `publish` also hands the event to `event_forwarder.FORWARDER`, which posts it to the
+event hub, Process Orchestration (C12-M1), and to `EVENT_SINKS` (ADR-0002, ADR-0006). Received events are
+never forwarded here; the hub routes them on. The relay itself makes no routing decision.
 
 Without `start()` (unit tests) nothing is delivered until `drain()` is called.
 """
@@ -54,6 +58,8 @@ import traceback
 import uuid
 import warnings
 from collections.abc import Callable
+
+from .event_forwarder import FORWARDER
 
 log = logging.getLogger("portal.events")
 FORBIDDEN_KEYS = ("secret", "password", "apikey", "token")
@@ -189,24 +195,32 @@ class Relay:
             ev = cloudevent(caller, etype, flat, id=event_id, time=occurred_at)
         else:
             ev = cloudevent(module, type, data)
+        with self._cv:
+            self._remember((ev["source"], ev["id"]))   # a copy that comes back over the inbox is not delivered again
         self._enqueue(ev)
+        FORWARDER.submit(ev)   # to the event hub and EVENT_SINKS of a split installation; nothing in a monolith
         return ev
 
     def receive(self, event: dict) -> tuple[dict, bool]:
         """Puts a CloudEvent received over HTTP (event inbox, FRAMEWORK 6) into the outbox unchanged.
 
-        Returns the event and whether it is new; the same `source` and `id` again is delivered once.
-        ValueError (from `validate`) if the event does not meet FRAMEWORK 6."""
+        Returns the event and whether it is new; the same `source` and `id` again (also an event this
+        runtime published itself) is delivered once. ValueError (from `validate`) if the event does not
+        meet FRAMEWORK 6."""
         ev = validate(event)
         key = (ev["source"], ev["id"])
         with self._cv:
             if key in self._received:
                 return ev, False
-            self._received[key] = None
-            if len(self._received) > RECEIVED_MAX:
-                self._received.popitem(last=False)
+            self._remember(key)
         self._enqueue(ev)
         return ev, True
+
+    def _remember(self, key: tuple[str, str]) -> None:
+        """Under `self._cv`: `key` is known; the oldest of more than RECEIVED_MAX keys is forgotten."""
+        self._received[key] = None
+        if len(self._received) > RECEIVED_MAX:
+            self._received.popitem(last=False)
 
     def _enqueue(self, ev: dict) -> None:
         with self._cv:
@@ -278,6 +292,7 @@ class Relay:
             self._received.clear()
             self.log.clear()
             self.failures.clear()
+        FORWARDER.reset()
 
 
 RELAY = Relay()

@@ -36,14 +36,14 @@ name: "Eclipse Dash IP Check"
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - uv.lock
       - pyproject.toml
       - DEPENDENCIES
       - .github/workflows/dependencies.yml
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - uv.lock
       - pyproject.toml

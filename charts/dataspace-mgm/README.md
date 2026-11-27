@@ -1,6 +1,6 @@
 # dataspace-mgm
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
+![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
 
 Product Helm chart of the Eclipse Tractus-X **Dataspace Management** (new portal).
 
@@ -23,9 +23,17 @@ For an operated installation see the [admin guide](https://github.com/eclipse-tr
 - Helm 3.8.0+
 - An ingress controller, if `backend.ingress.enabled` or `frontend.ingress.enabled` is set
 - For an operated installation: a Portal IAM (Keycloak, realm of C2-M5) and access to the core services of a CSP
+- PostgreSQL database when persistence is enabled (`database.enabled=true`, TRG 3.02, TRG 5.06)
 
-The service keeps its data in memory for now; no persistent volume and no database are needed (TRG 3.02).
-PostgreSQL databases per module will be added as chart dependencies together with the persistence of the modules.
+With default values, the service keeps its data in memory for demo and testing (`backend.testTools=true`).
+For operated installations, enable PostgreSQL persistence via `database.enabled=true`, with optional dedicated
+per-feature databases for physical schema isolation (ADR-0003, ADR-0005).
+
+To deploy the 5 decoupled domain cluster runtimes (`onboarding`, `security`, `marketplace`, `connectivity`, `operations`) instead of the monolith, use the domain clusters profile:
+
+```shell
+helm install dataspace-mgm charts/dataspace-mgm -f charts/dataspace-mgm/values-domain-clusters.yaml
+```
 
 ## TL;DR
 
@@ -113,6 +121,16 @@ helm uninstall dataspace-mgm --namespace dataspace-mgm
 | backend.testTools | bool | `true` | Starts the test tools of the installation (`TEST_TOOLS`): in-memory Portal IAM, EBW-Connector double, provider double. Only for demos and tests; set to `false` for an operated installation |
 | backend.tolerations | list | `[]` | Tolerations of the backend pods |
 | commonLabels | object | `{}` | Additional labels for all resources |
+| database.database | string | `"dataspace_mgm"` | Default database name (used as fallback or for monolithic deployment) |
+| database.enabled | bool | `false` | Whether database persistence is enabled (PostgreSQL) |
+| database.existingSecret | string | `""` | Name of an existing secret with the PostgreSQL password |
+| database.featureSecrets | object | `{}` | Dedicated secrets containing database URLs per feature |
+| database.featureUrls | object | `{}` | Dedicated database URLs per feature for physical schema isolation (ADR-0003, ADR-0005) |
+| database.host | string | `""` | Hostname of the PostgreSQL server |
+| database.password | string | `""` | Database password (plain text, prefer `existingSecret` in production) |
+| database.port | int | `5432` | Port of the PostgreSQL server |
+| database.secretKeys.password | string | `"password"` | Key for the database password in `existingSecret` |
+| database.user | string | `"dataspace"` | Database username |
 | frontend.affinity | object | `{}` | Affinity of the frontend pods |
 | frontend.config | object | `{"apiBaseUrl":"","environment":"prod"}` | Runtime configuration of the UI, served as `/config.json` (no rebuild per environment) |
 | frontend.config.apiBaseUrl | string | `""` | Address of the backend API. Defaults to the first backend ingress host, or to `http://localhost:8000` (port-forward) |
@@ -142,6 +160,10 @@ helm uninstall dataspace-mgm --namespace dataspace-mgm
 | fullnameOverride | string | `""` | Overrides the full name of the release |
 | imagePullSecrets | list | `[]` | Image pull secrets for private registries, e.g. `[{name: my-registry-secret}]` |
 | nameOverride | string | `""` | Overrides the chart name |
+| runtimes.enabled | bool | `false` | Whether the runtimes below are installed |
+| runtimes.items | list | `[]` | Runtimes: `name`, `features`, optional `runtime`, `replicaCount`, `resources`, `env`, etc. |
+| runtimes.replicaCount | int | `1` | Default number of replicas for runtimes |
+| runtimes.service.port | int | `8000` | Service port of every runtime |
 | serviceAccount.annotations | object | `{}` | Annotations for the service account |
 | serviceAccount.automountServiceAccountToken | bool | `false` | Whether the token of the service account is mounted into the pods (the components do not call the Kubernetes API) |
 | serviceAccount.create | bool | `true` | Whether a service account is created |

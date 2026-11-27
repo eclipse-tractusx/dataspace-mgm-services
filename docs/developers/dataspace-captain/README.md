@@ -95,7 +95,7 @@ The agent itself needs only Claude Code or GitHub Copilot with this repository o
 |---|---|---|
 | The overview | "Give me the big picture: which module does what, and where do connectors and wallets come in?" | `portal-spec-sources`, `flow-trace` |
 | Find an operation | "Which path, permission and scope does an OSP Reviewer need to approve an application?" | `portal-spec-sources` |
-| Function names | "Which functions must `modules/c3_m2/interface.py` provide?" | `portal-spec-sources`, `module-map` |
+| Function names | "Which functions must `features/csp_connection/interface.py` provide?" | `portal-spec-sources`, `module-map` |
 | Follow a flow | "My company stays REQUESTED after the approval. What runs next and what does it wait for?" | `flow-trace` |
 | Debug access | "Erika gets 404 on `GET /api/c3-m1/companies/…`. Here is her token." | `portal-token-inspect` |
 | Module status | "Which modules are still stand-ins, and what is left in C1-M2?" | `module-map` |

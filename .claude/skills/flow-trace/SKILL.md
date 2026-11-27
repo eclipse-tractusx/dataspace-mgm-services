@@ -65,7 +65,7 @@ $F check                        # flows.yaml against the specs, like C12-M1 at s
 3. An input with no source value is left out; if the step needs it, the step answers 400 and the run is `FAILED`
    (README 6.1). Follow the source back with `show`.
 4. Retries: `retryable: true` errors are retried with back-off up to `maxAttempts`; `false` is final, OSP staff can
-   retrigger (`POST /api/c12-m1/processes/{processId}/steps/{stepKey}/retrigger`, `retrigger_process_steps`).
+   retrigger (`POST /api/process-orchestration/processes/{processId}/steps/{stepKey}/retrigger`, `retrigger_process_steps`).
 5. In the UI, the process state arrives as SSE event `process-changed` (C12-M1 7.6 to 7.8); the UI never decides the
    next step itself.
 

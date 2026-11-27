@@ -32,7 +32,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "develop"]
   schedule:
     - cron: "0 1 * * *" # once a day
   workflow_dispatch:

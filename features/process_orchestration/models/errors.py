@@ -1,0 +1,49 @@
+#################################################################################
+#  Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+#  See the NOTICE file(s) distributed with this work for additional
+#  information regarding copyright ownership.
+#
+#  This program and the accompanying materials are made available under the
+#  terms of the Apache License, Version 2.0 which is available at
+#  https://www.apache.org/licenses/LICENSE-2.0.
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#  License for the specific language governing permissions and limitations
+#  under the License.
+#
+#  AI Disclosure: This file was entirely AI-generated.
+#  The AI-generated portions are made available under CC0-1.0 and not subject
+#  to the project's license. The human contributor has reviewed and verified
+#  that the code is correct.
+#
+#  SPDX-License-Identifier: Apache-2.0 AND CC0-1.0
+#  Assisted-By: Claude Code (claude-opus-5-5)
+#################################################################################
+"""Spec id and the errors of Process Orchestration (spec C12-M1): the Problem factory of the API (README 12), a
+broken flow catalogue and a failed lookup."""
+from __future__ import annotations
+
+from portal_common.problems import Problem
+
+MODULE = "c12-m1"
+LOOKUP_FAILED = "urn:c12-m1:problem:lookup-failed"
+
+
+def problem(status: int, name: str, *, detail: str | None = None) -> Problem:
+    """A Problem of C12-M1 (`urn:c12-m1:problem:<name>`): `validation`, `not-found` or `invalid-state`."""
+    return Problem(MODULE, status, name, detail=detail)
+
+
+class FlowError(Exception):
+    """flows.yaml does not fit the spec (README 6.2): the engine does not start."""
+
+
+class LookupFailed(Exception):
+    """A lookup answered neither 200 nor 404 (README 6.8): an error of the step, never `found: false`."""
+
+    def __init__(self, error: dict):
+        super().__init__(error.get("title"))
+        self.error = error

@@ -151,3 +151,82 @@ Image of a component. Call with (dict "image" .Values.backend.image "ctx" $).
 {{- define "dataspace-mgm.image" -}}
 {{- printf "%s:%s" .image.repository (default .ctx.Chart.AppVersion .image.tag) }}
 {{- end }}
+
+{{/*
+Name of the Deployment and Service of one runtime. Call with (dict "ctx" $ "runtime" $item).
+*/}}
+{{- define "dataspace-mgm.runtime.fullname" -}}
+{{- printf "%s-rt-%s" (include "dataspace-mgm.fullname" .ctx) .runtime.name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+`MODULE_URLS`: every feature of every runtime -> the service of its runtime (JSON, FRAMEWORK 4.7; readable
+names or spec ids, ADR-0003).
+*/}}
+{{- define "dataspace-mgm.runtime.moduleUrls" -}}
+{{- $urls := dict }}
+{{- range $rt := .Values.runtimes.items }}
+{{- $svc := include "dataspace-mgm.runtime.fullname" (dict "ctx" $ "runtime" $rt) }}
+{{- range $m := $rt.features }}
+{{- $_ := set $urls $m (printf "http://%s:%v" $svc $.Values.runtimes.service.port) }}
+{{- end }}
+{{- end }}
+{{- toJson $urls }}
+{{- end }}
+
+{{/*
+`EVENT_SINKS` of one runtime: the services of all other runtimes (ADR-0002).
+*/}}
+{{- define "dataspace-mgm.runtime.eventSinks" -}}
+{{- $self := .runtime.name }}
+{{- $sinks := list }}
+{{- range $rt := .ctx.Values.runtimes.items }}
+{{- if ne $rt.name $self }}
+{{- $sinks = append $sinks (printf "http://%s:%v" (include "dataspace-mgm.runtime.fullname" (dict "ctx" $.ctx "runtime" $rt)) $.ctx.Values.runtimes.service.port) }}
+{{- end }}
+{{- end }}
+{{- join "," $sinks }}
+{{- end }}
+
+{{/*
+Database environment variables for backend or runtime container (ADR-0003, ADR-0005, TRG 3.02, TRG 5.06).
+*/}}
+{{- define "dataspace-mgm.database.env" -}}
+{{- if .Values.database.enabled }}
+{{- if .Values.database.existingSecret }}
+- name: DATABASE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.database.existingSecret | quote }}
+      key: {{ default "password" .Values.database.secretKeys.password | quote }}
+- name: DATABASE_URL
+  value: {{ printf "postgresql://%s:$(DATABASE_PASSWORD)@%s:%v/%s" .Values.database.user .Values.database.host .Values.database.port .Values.database.database | quote }}
+{{- else if .Values.database.host }}
+- name: DATABASE_URL
+  value: {{ printf "postgresql://%s:%s@%s:%v/%s" .Values.database.user .Values.database.password .Values.database.host .Values.database.port .Values.database.database | quote }}
+{{- end }}
+{{- $allFeatures := list "registration" "application_review" "app_access" "technical_user" "company_profile" "csp_connection" "credentials" "dataspace_wallet_interface" "connector" "offers" "subscriptions" "notifications" "process_orchestration" }}
+{{- range $feature := $allFeatures }}
+{{- $varName := printf "%s_DATABASE_URL" ($feature | replace "-" "_" | upper) }}
+{{- if hasKey $.Values.database.featureUrls $feature }}
+- name: {{ $varName }}
+  value: {{ index $.Values.database.featureUrls $feature | quote }}
+{{- else if hasKey $.Values.database.featureSecrets $feature }}
+{{- $secret := index $.Values.database.featureSecrets $feature }}
+- name: {{ $varName }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret.name | quote }}
+      key: {{ default "url" $secret.key | quote }}
+{{- else if $.Values.database.perFeatureDatabase }}
+{{- if $.Values.database.existingSecret }}
+- name: {{ $varName }}
+  value: {{ printf "postgresql://%s:$(DATABASE_PASSWORD)@%s:%v/%s" $.Values.database.user $.Values.database.host $.Values.database.port $feature | quote }}
+{{- else if $.Values.database.host }}
+- name: {{ $varName }}
+  value: {{ printf "postgresql://%s:%s@%s:%v/%s" $.Values.database.user $.Values.database.password $.Values.database.host $.Values.database.port $feature | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -32,11 +32,11 @@ import uuid
 import httpx
 import jwt
 import pytest
+from conftest import BASE, bearer, person_token
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from conftest import BASE, bearer, person_token
 from portal_common import events, neighbours, problems, settings, spec, standin, tokens
 from portal_common import http as phttp
 from portal_common.problems import Problem
@@ -208,7 +208,7 @@ def test_neighbour_query_over_http_sends_service_token_and_maps_errors(monkeypat
     app = _iam_app()
     seen = {}
 
-    @app.get("/api/c1-m2/internal/applications/{aid}")
+    @app.get("/api/registration/internal/applications/{aid}")
     def get_app(aid: str, claims: dict = Depends(tokens.require("c1-m2", "query_c1_m2"))):
         seen["azp"] = claims["azp"]
         if aid == "teapot":
@@ -224,7 +224,7 @@ def test_neighbour_query_over_http_sends_service_token_and_maps_errors(monkeypat
 
 
 def test_neighbour_query_in_process_calls_the_interface_function(monkeypatch):
-    from modules.c1_m2 import interface as c1_m2
+    from features.registration import interface as c1_m2
     seen = {}
 
     def get_application_internal(*, applicationId):
@@ -373,7 +373,8 @@ def test_fallback_router_mounts_every_spec_operation(monkeypatch):
     monkeypatch.setattr(standin, "interface_function",
                         lambda module, name: standin._standin_function(standin._interface_operations(module)[name]))
     app = _iam_app()
-    implemented = APIRouter(prefix="/api/c3-m2")
+    base = spec.module("c3-m2").base_path   # /api/csp-connection since the migration (ADR-0003)
+    implemented = APIRouter(prefix=base)
 
     @implemented.post("/steps/register-did")
     def own():
@@ -383,15 +384,15 @@ def test_fallback_router_mounts_every_spec_operation(monkeypatch):
     app.include_router(standin.fallback_router("c3-m2", implemented))
     c = TestClient(app, base_url=BASE)
     tok = bearer(tokens.service_token("c12-m1"))
-    r = c.post("/api/c3-m2/steps/transfer-company", headers=tok,   # stand-in interface function of C3-M2
+    r = c.post(f"{base}/steps/transfer-company", headers=tok,   # stand-in interface function of C3-M2
                json={"processId": "p", "stepRunId": "s", "companyId": "c", "bpn": "BPNL000000000001"})
     assert r.status_code == 200 and r.json() == {"stepRunId": "s", "state": "DONE", "result": {"bpn": "BPNL000000000001"}}
-    assert c.post("/api/c3-m2/steps/register-did", headers=tok, json={}).json() == {"own": True}
-    r = c.get("/api/c3-m2/companies/c", headers=bearer(person_token("otto")))
+    assert c.post(f"{base}/steps/register-did", headers=tok, json={}).json() == {"own": True}
+    r = c.get(f"{base}/companies/c", headers=bearer(person_token("otto")))
     assert r.status_code == 501 and r.json()["type"] == "urn:c3-m2:problem:not-implemented"
-    assert c.post("/api/c3-m2/steps/register-company", json={}).status_code == 401
+    assert c.post(f"{base}/steps/register-company", json={}).status_code == 401
     paths = c.get("/openapi.json").json()["paths"]
-    n = sum(len(v) for k, v in paths.items() if k.startswith("/api/c3-m2"))
+    n = sum(len(v) for k, v in paths.items() if k.startswith(base))
     assert n == len(spec.module("c3-m2").operations)
 
 

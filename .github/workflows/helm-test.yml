@@ -31,7 +31,7 @@ name: "Lint and Test Charts"
 
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["main", "develop"]
     paths:
       - "charts/**"
       - "Dockerfile"

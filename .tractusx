@@ -26,16 +26,14 @@
 # Metadata file for the Tractus-X release checks (TRG 2.05).
 # See https://github.com/eclipse-tractusx/sig-release/blob/main/docs/metadata_file.md
 product: "dataspace-mgm"
-leadingRepository: "https://github.com/eclipse-tractusx/dataspace-mgm-service"
+leadingRepository: "https://github.com/eclipse-tractusx/dataspace-mgm-services"
 repoCategory: "product"
 repositories:
-  - name: "dataspace-mgm-service"
+  - name: "dataspace-mgm-services"
     usage: "Leading repository: backend (modular monolith) of the Dataspace Management (new portal), product Helm chart, architecture and admin documentation"
-    url: "https://github.com/eclipse-tractusx/dataspace-mgm-service"
+    url: "https://github.com/eclipse-tractusx/dataspace-mgm-services"
   - name: "dataspace-mgm-ui"
     usage: "User interface of the Dataspace Management (new portal) and end user manual"
     url: "https://github.com/eclipse-tractusx/dataspace-mgm-ui"
-# The combined OpenAPI document of the service is added to docs/api/openAPI.yaml
-# together with the source code; it will then be referenced here (TRG 1.08):
-# openApiSpecs:
-#   - "https://raw.githubusercontent.com/eclipse-tractusx/dataspace-mgm-service/main/docs/api/openAPI.yaml"
+openApiSpecs:
+  - "https://raw.githubusercontent.com/eclipse-tractusx/dataspace-mgm-services/main/docs/api/openAPI.yaml"

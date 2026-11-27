@@ -74,4 +74,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1:8000/health || exit 1
 
-CMD ["uvicorn", "--factory", "scaffold.app:create_app", "--host", "0.0.0.0", "--port", "8000"]
+# `RUNTIME` picks the runtime of the pod (ADR-0003): `installation` (default, every module), a hybrid such as
+# `onboarding`, or one feature such as `registration`
+CMD ["python", "-m", "runtimes"]

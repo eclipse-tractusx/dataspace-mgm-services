@@ -10,19 +10,22 @@ between modules in the same process. The module specifications (until they are m
 
 | Module | Base path |
 |---|---|
-| C1-M2 Registration | `/api/c1-m2` |
-| C1-M3 Application Review | `/api/c1-m3` |
-| C2-M2 Users and App Access | `/api/c2-m2` |
-| C2-M3 Technical Users | `/api/c2-m3` |
-| C3-M1 Company Profile | `/api/c3-m1` |
-| C3-M2 CSP Connection | `/api/c3-m2` |
-| C4-M1 Credentials | `/api/c4-m1` |
-| C4-M2 Dataspace Wallet Interface | `/api/c4-m2` |
-| C6-M1 Connectors | `/api/c6-m1` |
-| C8-M1 Offers | `/api/c8-m1` |
-| C10-M1 Subscriptions | `/api/c10-m1` |
-| C11-M1 Notifications | `/api/c11-m1` |
-| C12-M1 Process Orchestration | `/api/c12-m1` |
+| C1-M2 Registration | `/api/registration` (migrated feature, ADR-0003) |
+| C1-M3 Application Review | `/api/application-review` (migrated feature, ADR-0003) |
+| C2-M2 Users and App Access | `/api/app-access` (migrated feature, ADR-0003) |
+| C2-M3 Technical Users | `/api/technical-user` (migrated feature, ADR-0003) |
+| C3-M1 Company Profile | `/api/company-profile` (migrated feature, ADR-0003) |
+| C3-M2 CSP Connection | `/api/csp-connection` (migrated feature, ADR-0003) |
+| C4-M1 Credentials | `/api/credentials` (migrated feature, ADR-0003) |
+| C4-M2 Dataspace Wallet Interface | `/api/dataspace-wallet-interface` (migrated feature, ADR-0003) |
+| C6-M1 Connectors | `/api/connector` (migrated feature, ADR-0003) |
+| C8-M1 Offers | `/api/offers` (migrated feature, ADR-0003) |
+| C10-M1 Subscriptions | `/api/subscriptions` (migrated feature, ADR-0003) |
+| C11-M1 Notifications | `/api/notifications` (migrated feature, ADR-0003) |
+| C12-M1 Process Orchestration | `/api/process-orchestration` (migrated feature, ADR-0003) |
+
+A migrated feature (`features/<name>/`, ADR-0003) is served under its readable name instead of the spec id; the old
+path answers 404. Every other module keeps `/api/<module>` of its `openapi.yaml` until it migrates.
 
 Conventions that apply to all modules (FRAMEWORK 4.1): JSON fields in camelCase, times in ISO 8601 UTC, IDs as UUID,
 paginated lists with `page`/`size`, steps for Process Orchestration under `/steps/...`, queries for other modules under
@@ -46,4 +49,4 @@ This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses
 
 - SPDX-License-Identifier: CC-BY-4.0
 - SPDX-FileCopyrightText: 2026 Contributors to the Eclipse Foundation
-- Source URL: https://github.com/eclipse-tractusx/dataspace-mgm-service/blob/main/docs/api/README.md
+- Source URL: https://github.com/eclipse-tractusx/dataspace-mgm-services/blob/main/docs/api/README.md

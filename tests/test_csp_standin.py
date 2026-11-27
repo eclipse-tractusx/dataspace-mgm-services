@@ -112,7 +112,7 @@ def test_issuer_calls_back_to_c4_m1_with_a_token_of_the_osp_iam(world):
     osp = FastAPI()
     osp.include_router(test_iam.router)
 
-    @osp.post("/api/c4-m1/issuer-callbacks/membership")
+    @osp.post("/api/credentials/issuer-callbacks/membership")
     def callback(body: dict, authorization: str = Header("")):
         received["claims"] = tokens.verify(authorization.removeprefix("Bearer "))
         received["body"] = body
@@ -126,7 +126,8 @@ def test_issuer_calls_back_to_c4_m1_with_a_token_of_the_osp_iam(world):
     c.put("/v1/companies/BPNL00000000OSPA/did", json={"did": w["did"]}, headers=a)
     assert c.put("/issuer/v1/holders/BPNL00000000OSPA", json={"did": w["did"]}, headers=a).status_code in (200, 201)
     r = c.put("/issuer/v1/holders/BPNL00000000OSPA/grants/membership",
-              json={"callbackUrl": f"{BASE}/api/c4-m1/issuer-callbacks/membership", "memberOf": "Catena-X"}, headers=a)
+              json={"callbackUrl": f"{BASE}/api/credentials/issuer-callbacks/membership", "memberOf": "Catena-X"},
+              headers=a)
     assert r.status_code == 204
     r = c.post(f"/identity/v1/participants/{w['participantContextId']}/credentials/request",
                json={"holderPid": "p1", "credentials": [{"type": "membership"}]}, headers={"x-api-key": w["apiKey"]})

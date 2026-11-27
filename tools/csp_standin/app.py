@@ -62,7 +62,7 @@ import jwt
 from fastapi import Body, FastAPI, Form, Header, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from portal_common import http
+from portal_common import http, spec
 from portal_common.spec import ROOT
 from tools.keys import ec_jwk, load_or_create_ec
 
@@ -131,7 +131,9 @@ class Csp:
         threading.Thread(target=run, daemon=True).start()
 
     def notify(self, osp_id: str, notification: dict) -> None:
-        url = (self.core.osps.get(osp_id) or {}).get("installationUrl", "").rstrip("/") + "/api/c3-m2/csp-notifications"
+        # the callback path of C3-M2 (README 7.2) under the base path the installation serves (ADR-0003)
+        path = spec.module("c3-m2").base_path + "/csp-notifications"
+        url = (self.core.osps.get(osp_id) or {}).get("installationUrl", "").rstrip("/") + path
         self.later(self.callback, osp_id, "sa-csp", url, notification)
 
     # -------------------------------------------------------- authentication of the OSPs

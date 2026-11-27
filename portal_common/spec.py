@@ -97,13 +97,26 @@ class Operation:
 class ModuleSpec:
     id: str              # e.g. c3-m1
     folder: str          # e.g. C3-M1-CompanyProfile
-    base_path: str       # e.g. /api/c3-m1
+    spec_path: str       # base path in the spec's `servers`, e.g. /api/company-profile (earlier /api/c3-m1)
     operations: tuple[Operation, ...]
     document: dict = field(compare=False, hash=False, repr=False)
 
     @property
     def package(self) -> str:
         return self.id.replace("-", "_")
+
+    @property
+    def base_path(self) -> str:
+        """Base path the installation serves: `/api/<readable-name>` for a migrated feature, otherwise the spec's
+        `/api/<module>` (ADR-0003, `portal_common.layout.base_path`). Every router and HTTP caller reads this."""
+        from portal_common import layout   # layout depends on spec, not the other way round
+
+        return layout.base_path(self.id)
+
+    @property
+    def name(self) -> str:
+        """Readable name from the spec folder: `C3-M1-CompanyProfile` -> `company_profile` (ADR-0003)."""
+        return snake_case(self.folder.split("-", 2)[2])
 
     def steps(self) -> dict[str, Operation]:
         return {op.path.removeprefix("/steps/"): op for op in self.operations if op.is_step}
@@ -135,10 +148,12 @@ def _load(directory: str) -> dict[str, ModuleSpec]:
     for f in sorted(Path(directory).glob("*/openapi.yaml")):
         doc = yaml.safe_load(f.read_text(encoding="utf-8"))
         url = ((doc.get("servers") or [{}])[0]).get("url", "")
-        m = re.fullmatch(r"/api/([a-z0-9-]+)", url)
-        if not m:
-            continue  # C2-M5 (Keycloak) and C5-M1 (standards) have no /api/<module> base
-        mid = m.group(1)
+        if not re.fullmatch(r"/api/[a-z0-9-]+", url):
+            continue  # C2-M5 (Keycloak) and C5-M1 (standards) have no /api/<base>
+        # The module id comes from the folder (C3-M1-CompanyProfile -> c3-m1): the spec's `servers` carries
+        # either the old /api/<module> or the readable /api/<feature> of FRAMEWORK 4.1 (OP-55).
+        folder = re.match(r"(C[0-9]+-M[0-9]+)(?:-|$)", f.parent.name)
+        mid = folder.group(1).lower() if folder else url.removeprefix("/api/")
         ops = []
         for path, item in (doc.get("paths") or {}).items():
             for method in METHODS:
@@ -153,7 +168,7 @@ def _load(directory: str) -> dict[str, ModuleSpec]:
 
 
 def modules() -> dict[str, ModuleSpec]:
-    """All modules of the spec with an `/api/<module>` base, keyed by module id."""
+    """All modules of the spec with an `/api/...` base, keyed by module id (from the folder name)."""
     return _load(str(spec_dir()))
 
 

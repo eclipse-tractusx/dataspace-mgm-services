@@ -31,12 +31,19 @@ import re
 
 import pytest
 
-from portal_common import events, spec, standin
+from portal_common import events, layout, spec, standin
 from scaffold import registry
 from conftest import needs_admin_api
 from test_demo_scenarios import installation
 
-CALL = re.compile(r"`(GET|POST|PUT|PATCH|DELETE) (?:/api/(c\d+-m\d+))?(/internal/[^`?\s]*)")
+CALL = re.compile(r"`(GET|POST|PUT|PATCH|DELETE) (?:/api/([a-z0-9-]+))?(/internal/[^`?\s]*)")
+
+
+def _module_of(base: str) -> str | None:
+    """Module id for the base in a README path: `/api/c3-m1` (old) or `/api/company-profile` (FRAMEWORK 4.1, OP-55)."""
+    if base in spec.modules():
+        return base
+    return next((m for m, ms in spec.modules().items() if ms.spec_path == f"/api/{base}"), None)
 
 
 def neighbour_queries() -> dict[tuple[str, str], set[str]]:
@@ -45,7 +52,8 @@ def neighbour_queries() -> dict[tuple[str, str], set[str]]:
     for caller, ms in spec.modules().items():
         sec = re.search(r"^## 11\..*?(?=^## 12\.|\Z)", spec.readme(ms.folder), re.S | re.M)
         for row in (sec.group(0) if sec else "").splitlines():
-            for method, target, path in CALL.findall(row):
+            for method, base, path in CALL.findall(row):
+                target = _module_of(base) if base else None
                 if not target:   # path without /api/<module>: the module whose spec has it, named in the row
                     found = [m for m in spec.modules() if spec.module(m).find(method, path)]
                     named = [m for m in found if m in row.lower()]
@@ -61,7 +69,8 @@ QUERIES = sorted(neighbour_queries())
 
 
 def kit_owned(target: str) -> bool:
-    return next(e.kind for e in registry.load() if e.id == target) in ("stand-in", "provided")
+    """Stand-ins, provided modules and migrated features (whose interface keeps the stand-in fallback)."""
+    return next(e.kind for e in registry.load() if e.id == target) in ("stand-in", "provided", "feature")
 
 
 def test_section_11_is_parsed():
@@ -73,7 +82,7 @@ def test_section_11_is_parsed():
 def test_standin_implements_every_query_its_neighbours_call(target, function):
     if not kit_owned(target):
         pytest.skip(f"{target} is a team module")
-    iface = importlib.import_module(f"modules.{spec.module(target).package}.interface")
+    iface = importlib.import_module(layout.interface_package(target))
     assert function in vars(iface), (f"stand-in {target} lacks {function} (called by "
                                      f"{sorted(neighbour_queries()[(target, function)])}); it would answer 501")
 
@@ -157,3 +166,11 @@ def test_standin_queries_answer_with_the_field_names_of_the_spec(tmp_path, monke
     assert not errors, "\n".join(errors)
     # The more teams replace their stand-in, the fewer queries are left to check here.
     assert checked == sum(1 for q in QUERIES if params[q] is not None and kit_owned(q[0]))
+
+
+def test_standin_router_custom_tags():
+    r_default = standin.router("c1-m2")
+    assert r_default.tags == ["c1-m2 (stand-in)"]
+    r_custom = standin.router("c1-m2", tags=["c1-m2 Registration"])
+    assert r_custom.tags == ["c1-m2 Registration"]
+

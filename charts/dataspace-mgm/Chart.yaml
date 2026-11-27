@@ -31,7 +31,7 @@ description: |
   (backend, modular monolith) and the Dataspace Management UI.
 type: application
 # The chart version follows semantic versioning (TRG 5.03).
-version: 0.1.0
+version: 0.2.0
 # The version of the Dataspace Management Service that is installed.
 appVersion: "0.1.0"
 home: https://github.com/eclipse-tractusx/dataspace-mgm-service

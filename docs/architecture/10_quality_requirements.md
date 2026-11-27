@@ -10,6 +10,8 @@
 | Operability | An operator installs the chart with the default values. | The installation starts and `helm test` passes (TRG 5.08, TRG 5.09). |
 | Operability | An operator upgrades from one of the last three chart versions. | The upgrade succeeds without manual steps (TRG 5.10, TRG 5.11). |
 
+Quality gate requirements, static analysis (ruff, mypy), layer boundary enforcement, and OpenAPI contract checking are defined in [ADR-0004](decisions/ADR-0004-internal-boundaries-and-quality-gate.md) and executed via `tools/quality/gate.py`.
+
 ## NOTICE
 
 This work is licensed under the [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode).

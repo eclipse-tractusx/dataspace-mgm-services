@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 from conftest import ROOT
-from portal_common import settings
+from portal_common import layout, settings
 from scaffold import app as scaffold_app
 from tools import iam_backend, keycloak_admin, test_iam
 
@@ -115,5 +115,7 @@ def test_realm_has_the_persons_of_the_test_data(osp):
 @pytest.mark.parametrize("osp", INSTALLATIONS)
 def test_realm_has_a_service_account_per_module(osp):
     clients = {c["clientId"] for c in _realm(osp)["clients"]}
-    modules = [p.name for p in (ROOT / "modules").iterdir() if (p / "__init__.py").exists()]
-    assert modules and all(f"svc-{m.replace('_', '-')}" in clients for m in modules)
+    # every implemented module: migrated features (by spec id) and those still in modules/<id>/
+    modules = sorted(set(layout.features()) | {p.name.replace("_", "-") for p in (ROOT / "modules").glob("*/")
+                                               if (p / "__init__.py").exists()})
+    assert modules and all(f"svc-{m}" in clients for m in modules)

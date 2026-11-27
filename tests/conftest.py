@@ -57,7 +57,7 @@ def _clean_state():
 def team_modules_needing_keycloak() -> list[str]:
     """C2-M2 and C2-M3 of a team call the Admin API of the Portal IAM; the in-memory test IAM has none."""
     from scaffold import registry
-    return [e.id for e in registry.load() if e.id in ("c2-m2", "c2-m3") and e.kind == "team"]
+    return [e.id for e in registry.load() if e.id in ("c2-m2", "c2-m3") and e.kind in ("team", "feature")]
 
 
 needs_admin_api = pytest.mark.skipif(

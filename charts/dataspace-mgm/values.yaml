@@ -185,6 +185,71 @@ backend:
   # -- Affinity of the backend pods
   affinity: {}
 
+# Database configuration for persistence (ADR-0003, ADR-0005, TRG 3.02, TRG 5.06).
+# When disabled (default), the backend and runtimes keep state in-memory (SQLite) for demo/test purposes.
+# When enabled, connects to PostgreSQL with optional per-feature physical schema isolation.
+database:
+  # -- Whether database persistence is enabled (PostgreSQL)
+  enabled: false
+  # -- Hostname of the PostgreSQL server
+  host: ""
+  # -- Port of the PostgreSQL server
+  port: 5432
+  # -- Default database name (used as fallback or for monolithic deployment)
+  database: "dataspace_mgm"
+  # -- Database username
+  user: "dataspace"
+  # -- Database password (plain text, prefer `existingSecret` in production)
+  password: ""
+  # -- Name of an existing secret with the PostgreSQL password
+  existingSecret: ""
+  # -- Keys in `existingSecret`
+  secretKeys:
+    # -- Key for the database password
+    password: "password"
+  # -- Whether to automatically derive dedicated feature database URLs from host/port/credentials
+  # using the feature name as the database name (matching `deploy/postgres/init-feature-databases.sql`).
+  # Prevents table collisions across features in multi-feature runtimes (ADR-0003, FRAMEWORK 4.9).
+  perFeatureDatabase: true
+  # -- Dedicated database URLs per feature for physical schema isolation (ADR-0003, ADR-0005).
+  # Key is feature name (e.g. `registration`), value is full connection URL (`postgresql://...`).
+  featureUrls: {}
+  # -- Dedicated secrets containing database URLs per feature (`{feature: {name: secretName, key: keyName}}`).
+  featureSecrets: {}
+
+# One runtime (Deployment + Service) per feature or group of features, from the image of the backend (ADR-0002, ADR-0003, ADR-0005).
+# Set `backend.enabled=false` when you use it. The settings of `backend.*` (IAM, CSP, secrets, database, env, probes,
+# security context) apply to every runtime. The ingress of the backend routes
+# `/api/<feature>` (`_` as `-`) to the runtime: a migrated feature by its readable name (`/api/company-profile`, ADR-0003).
+# See `values-domain-clusters.yaml` for the standard 5-cluster deployment (ADR-0005).
+runtimes:
+  # -- Whether the runtimes below are installed
+  enabled: false
+  # -- Default number of replicas; modules with in-memory state need 1
+  replicaCount: 1
+  service:
+    # -- Service port of every runtime
+    port: 8000
+  # -- Runtimes: `name`, `features` (migrated features by readable name), optional `runtime`
+  # (`RUNTIME`: a runtime in `runtimes/` or a feature; default `installation`, which serves `features`),
+  # `replicaCount`, `resources`, `env`, `extraEnv`, `extraVolumes`, `extraVolumeMounts`.
+  items: []
+  # - name: onboarding
+  #   runtime: onboarding
+  #   features: [registration, company_profile, application_review]
+  # - name: security
+  #   runtime: security
+  #   features: [technical_user, credentials, app_access, dataspace_wallet_interface]
+  # - name: marketplace
+  #   runtime: marketplace
+  #   features: [offers, subscriptions]
+  # - name: connectivity
+  #   runtime: connectivity
+  #   features: [csp_connection, connector]
+  # - name: operations
+  #   runtime: operations
+  #   features: [notifications, process_orchestration]
+
 frontend:
   # -- Whether the Dataspace Management UI is installed
   enabled: true
