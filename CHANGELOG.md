@@ -69,8 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Startup database persistence: preserve existing feature database records on application startup instead of emptying tables; table reset remains available via explicit scaffold reset and test fixtures ([#101](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/101)).
+- Enforce database isolation in multi-feature runtimes: refuse startup when plain `DATABASE_URL` is set without dedicated variables for each served feature, preventing table collisions across features (ADR-0003 decision 6, FRAMEWORK 4.9, [#102](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/102)). Updated Helm chart to automatically derive dedicated feature database URLs when persistence is enabled.
+- C11-M1 Notifications serves its operations with the `operationId` of its spec (`listNotifications`, `getNotification`, …) instead of names FastAPI generated from the paths; `docs/api/openAPI.yaml` is exported again (#106).
 - Quality gate: guard `modules/` directory discovery in `checks.py` when all legacy modules are fully migrated to `features/`.
 
+- C11-M1 Notifications gives `doneAt` in UTC (FRAMEWORK 4.1) also when the closing event's `time` has another offset (#103).
 - The spec loader takes the module id from the spec folder (`C3-M1-CompanyProfile` -> `c3-m1`) instead of the `servers` URL, so the spec's readable base paths (`/api/company-profile`, FRAMEWORK 4.1, OP-55 of portal-backend-spec) load as well as the old `/api/c3-m1`.
 - Align the Docker build and runtime images with the project's required Python 3.12 version.
 - Every module of an installation reads its own database variable (`C2_M2_DATABASE_URL`, `C3_M1_DATABASE_URL`); `DATABASE_URL` stays the fallback for a module that runs alone. Before, one `DATABASE_URL` switched C2-M2 and C3-M1 to the same database ([#54](https://github.com/eclipse-tractusx/dataspace-mgm-services/issues/54)).

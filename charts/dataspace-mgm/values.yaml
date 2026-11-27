@@ -207,6 +207,10 @@ database:
   secretKeys:
     # -- Key for the database password
     password: "password"
+  # -- Whether to automatically derive dedicated feature database URLs from host/port/credentials
+  # using the feature name as the database name (matching `deploy/postgres/init-feature-databases.sql`).
+  # Prevents table collisions across features in multi-feature runtimes (ADR-0003, FRAMEWORK 4.9).
+  perFeatureDatabase: true
   # -- Dedicated database URLs per feature for physical schema isolation (ADR-0003, ADR-0005).
   # Key is feature name (e.g. `registration`), value is full connection URL (`postgresql://...`).
   featureUrls: {}

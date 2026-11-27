@@ -205,16 +205,28 @@ Database environment variables for backend or runtime container (ADR-0003, ADR-0
 - name: DATABASE_URL
   value: {{ printf "postgresql://%s:%s@%s:%v/%s" .Values.database.user .Values.database.password .Values.database.host .Values.database.port .Values.database.database | quote }}
 {{- end }}
-{{- range $feature, $url := .Values.database.featureUrls }}
-- name: {{ printf "%s_DATABASE_URL" ($feature | replace "-" "_" | upper) }}
-  value: {{ $url | quote }}
-{{- end }}
-{{- range $feature, $secret := .Values.database.featureSecrets }}
-- name: {{ printf "%s_DATABASE_URL" ($feature | replace "-" "_" | upper) }}
+{{- $allFeatures := list "registration" "application_review" "app_access" "technical_user" "company_profile" "csp_connection" "credentials" "dataspace_wallet_interface" "connector" "offers" "subscriptions" "notifications" "process_orchestration" }}
+{{- range $feature := $allFeatures }}
+{{- $varName := printf "%s_DATABASE_URL" ($feature | replace "-" "_" | upper) }}
+{{- if hasKey $.Values.database.featureUrls $feature }}
+- name: {{ $varName }}
+  value: {{ index $.Values.database.featureUrls $feature | quote }}
+{{- else if hasKey $.Values.database.featureSecrets $feature }}
+{{- $secret := index $.Values.database.featureSecrets $feature }}
+- name: {{ $varName }}
   valueFrom:
     secretKeyRef:
       name: {{ $secret.name | quote }}
       key: {{ default "url" $secret.key | quote }}
+{{- else if $.Values.database.perFeatureDatabase }}
+{{- if $.Values.database.existingSecret }}
+- name: {{ $varName }}
+  value: {{ printf "postgresql://%s:$(DATABASE_PASSWORD)@%s:%v/%s" $.Values.database.user $.Values.database.host $.Values.database.port $feature | quote }}
+{{- else if $.Values.database.host }}
+- name: {{ $varName }}
+  value: {{ printf "postgresql://%s:%s@%s:%v/%s" $.Values.database.user $.Values.database.password $.Values.database.host $.Values.database.port $feature | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

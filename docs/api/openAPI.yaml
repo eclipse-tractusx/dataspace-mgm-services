@@ -7733,7 +7733,7 @@ paths:
       summary: List Notifications
       description: 'README 7.1: filters, sorting by `createdAt`, paging as in FRAMEWORK
         4.1; invalid filters give 400.'
-      operationId: list_notifications_api_notifications_notifications_get
+      operationId: listNotifications
       parameters:
       - name: topic
         in: query
@@ -7833,7 +7833,7 @@ paths:
       - 'Notifications: Inbox'
       summary: Count Notifications
       description: 'README 7.2: counters of the own inbox (hidden ones left out).'
-      operationId: count_notifications_api_notifications_notifications_count_get
+      operationId: countNotifications
       parameters:
       - name: authorization
         in: header
@@ -7863,7 +7863,7 @@ paths:
       summary: Stream Notification Events
       description: 'README 7.6: without `Last-Event-ID` only new events; an id no
         longer kept gives `resync`.'
-      operationId: stream_notification_events_api_notifications_notifications_events_get
+      operationId: streamNotificationEvents
       parameters:
       - name: Last-Event-ID
         in: header
@@ -7900,7 +7900,7 @@ paths:
       summary: Get Notification
       description: 'README 7.3: one notification of the own inbox with `read` for
         the caller.'
-      operationId: get_notification_api_notifications_notifications__notificationId__get
+      operationId: getNotification
       parameters:
       - name: notificationId
         in: path
@@ -7936,7 +7936,7 @@ paths:
       summary: Mark Read
       description: 'README 7.4: set `read_at` for the caller; idempotent, the first
         time is kept.'
-      operationId: mark_read_api_notifications_notifications__notificationId__read_post
+      operationId: markRead
       parameters:
       - name: notificationId
         in: path
@@ -7967,7 +7967,7 @@ paths:
       - 'Notifications: Inbox'
       summary: Mark Unread
       description: 'README 7.4: remove `read_at` for the caller; idempotent.'
-      operationId: mark_unread_api_notifications_notifications__notificationId__unread_post
+      operationId: markUnread
       parameters:
       - name: notificationId
         in: path
@@ -7999,7 +7999,7 @@ paths:
       summary: Hide Notification
       description: 'README 7.5: hide for the caller; an open task gives 409 `task-open`;
         idempotent.'
-      operationId: hide_notification_api_notifications_notifications__notificationId__hide_post
+      operationId: hideNotification
       parameters:
       - name: notificationId
         in: path
@@ -15657,4 +15657,6 @@ components:
 tags:
 - name: Event Inbox
   description: 'Event inbox of the installation: receives the CloudEvents of split-out
-    modules over HTTP (FRAMEWORK 6, proposal OP-54)'
+    modules over HTTP (FRAMEWORK 6, proposal OP-54); in the runtime of Process Orchestration
+    the inbox of the event hub, which routes every event on to the subscribing runtimes
+    (ADR-0006)'

@@ -109,8 +109,8 @@ uv run uvicorn --factory scaffold.app:create_app --port 8000
 
 Databases: all modules of an installation run in one process, so each module with a database reads its own variable,
 `C2_M2_DATABASE_URL` (optional for C2-M2, otherwise in memory; `APP_ACCESS_DATABASE_URL` also works) and `C3_M1_DATABASE_URL` (optional, otherwise in memory). Do not set
-`DATABASE_URL` in an installation: a module without its own variable falls back to it (README 4, for a module that
-runs alone), so one value would switch several modules to the same database.
+`DATABASE_URL` in an installation: a runtime serving multiple features refuses to start when `DATABASE_URL` is set
+without dedicated variables configured for each feature (ADR-0003 decision 6, FRAMEWORK 4.9).
 
 ```shell
 docker run -d --name c2m2-db -e POSTGRES_PASSWORD=local-test-only -e POSTGRES_DB=c2_m2 -p 5432:5432 postgres:16

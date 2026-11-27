@@ -54,8 +54,9 @@ from __future__ import annotations
 
 import os
 import types
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.orm import registry
@@ -150,3 +151,35 @@ def dispose() -> None:
     """Close every pool, e.g. after a test changed a database variable."""
     while _engines:
         _engines.popitem()[1].dispose()
+
+
+def check_isolation(entries: Iterable[Any]) -> None:
+    """Enforce that a runtime serving more than one feature does not silently share DATABASE_URL
+    (ADR-0003 decision 6, FRAMEWORK 4.9).
+
+    A runtime with more than one feature refuses to start when DATABASE_URL is set unless every
+    served feature has a dedicated database variable configured (<FEATURE>_DATABASE_URL or
+    <SPEC_ID>_DATABASE_URL).
+    """
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        return
+
+    entries_list = list(entries)
+    if len(entries_list) <= 1:
+        return
+
+    missing: dict[str, list[str]] = {}
+    for e in entries_list:
+        mid = getattr(e, "id", str(e))
+        own_vars = [v for v in variables(mid) if v != "DATABASE_URL"]
+        if not any(os.environ.get(v, "").strip() for v in own_vars):
+            missing[mid] = own_vars
+
+    if missing:
+        formatted = ", ".join(f"{mid} ({' or '.join(vars)})" for mid, vars in missing.items())
+        raise ValueError(
+            f"Multi-feature runtime cannot start with shared DATABASE_URL: each feature requires its own "
+            f"database variable (ADR-0003 decision 6, FRAMEWORK 4.9). Missing variables for: {formatted}"
+        )
+
